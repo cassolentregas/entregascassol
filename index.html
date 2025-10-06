@@ -13,10 +13,20 @@
         body { font-family: Arial, sans-serif; background-color: var(--cor-fundo); color: var(--cor-texto); margin: 0; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
         h2 { color: var(--cor-principal); border-bottom: 2px solid var(--cor-principal); padding-bottom: 10px; margin-bottom: 20px; }
-        input[type="text"], textarea, input[type="file"], button { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: var(--cor-principal); color: white; border: none; cursor: pointer; }
+        input[type="text"], textarea, input[type="file"], button { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background-color: var(--cor-principal); color: white; border: none; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
         #signature-pad { width: 100%; height: 200px; border: 1px solid #ccc; margin-bottom: 15px; background-color: #EEEEEE;}
         .hidden { display: none; }
+
+        /* Estilos do Gerente (Menu Suspenso) */
+        .pedido-card { 
+            border: 1px solid #ddd; padding: 10px; margin-bottom: 8px; 
+            cursor: pointer; background-color: #f9f9f9; transition: background-color 0.2s;
+        }
+        .pedido-card:hover {
+            background-color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -33,8 +43,8 @@
             <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
             <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
             
-            <label>Foto da Entrega:</label>
-            <input type="file" id="foto" accept="image/*" capture="camera" required>
+            <label>Fotos da Entrega:</label>
+            <input type="file" id="foto" accept="image/*" capture="camera" multiple required>
 
             <label>Assinatura do Cliente:</label>
             <canvas id="signature-pad"></canvas>
@@ -46,25 +56,41 @@
 
         <div id="gerente-area" class="hidden">
             <h2>Relatório de Entregas</h2>
-            <div id="relatorio-list">
+            
+            <div style="margin-bottom: 20px;">
+                <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
+            </div>
+
+            <div id="historico-list">
+                <p>Busque por um número de pedido ou clique em Entrar como Gerente.</p>
+            </div>
+
+            <hr style="margin: 20px 0;">
+
+            <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
+                <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
+                <div id="detalhes-conteudo">
                 </div>
+            </div>
         </div>
         
         <button onclick="handleLogout()" style="margin-top: 20px;">Sair</button>
     </div>
 
     <script>
-        // Passo 2.2: Lógica JavaScript (Supabase)
+// ** 1. Configuração do Supabase (Chaves Injetadas) **
+const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
 
-// ** 1. Configuração do Supabase (Substitua pelos seus dados!) **
-const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co'; // Ex: 'https://xxxxxx.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';    // Ex: 'eyJhbGciOiJIUzI1NiI...'
 const BUCKET_NAME = 'comprovantes';
-const ENTREGAS_TABLE = 'entregas';
+const ENTREGAS_TABLE = 'entregas'; 
+const FOTOS_TABLE = 'fotos_comprovantes'; 
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ** 2. Configuração da Assinatura **
+let currentUser = null; 
+
+// ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
 const signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(238, 238, 238)' });
 function resizeCanvas() {
@@ -73,13 +99,10 @@ function resizeCanvas() {
     signaturePad.clear();
 }
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.onload = resizeCanvas;
 
-// ** 3. Lógica de Login e Permissões (Simulada) **
-// NOTE: Como o Supabase Auth (Gratuito) é mais complexo para configurar em nível
-// Entregador/Gerente, simularemos o login com um campo simples e permissões fixas.
-let currentUser = null; 
 
+// ** 3. Lógica de Login e Permissões **
 function handleLogin() {
     const user = document.getElementById('user-input').value.toLowerCase().trim();
     
@@ -93,7 +116,7 @@ function handleLogin() {
         document.getElementById('login-area').classList.add('hidden');
         document.getElementById('entregador-area').classList.add('hidden');
         document.getElementById('gerente-area').classList.remove('hidden');
-        fetchDeliveries(); // Carrega os dados para o gerente
+        fetchDeliveries(); // Carrega a lista inicial (sem busca)
     } else {
         alert('Usuário inválido. Use "entregador" ou "gerente" para testar.');
     }
@@ -107,7 +130,44 @@ function handleLogout() {
     document.getElementById('user-input').value = '';
 }
 
-// ** 4. Função de Envio de Entrega (Entregador) **
+
+// ** 4. Função de Compressão de Imagem (Auxiliar) **
+// Retorna um Blob de imagem JPG comprimido
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const MAX_WIDTH = 800; // Define a largura máxima
+                let width = img.width;
+                let height = img.height;
+
+                // Redimensiona proporcionalmente
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Converte para Blob JPG com qualidade 70%
+                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
+            };
+            img.onerror = reject; 
+            img.src = event.target.result;
+        };
+        reader.onerror = reject; 
+        reader.readAsDataURL(file);
+    });
+}
+
+
+// ** 5. Função de Envio de Entrega (Múltiplas Fotos) **
 async function submitDelivery() {
     if (signaturePad.isEmpty()) {
         return alert("Assinatura do cliente é obrigatória.");
@@ -115,103 +175,89 @@ async function submitDelivery() {
     const pedido = document.getElementById('pedido').value.trim();
     const endereco = document.getElementById('endereco').value.trim();
     const cliente = document.getElementById('cliente').value.trim();
-    const fotoFile = document.getElementById('foto').files[0];
+    const fotoFiles = document.getElementById('foto').files; 
 
-    if (!pedido || !endereco || !cliente || !fotoFile) {
-        return alert("Todos os campos e a foto são obrigatórios.");
+    if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
+        return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
     }
 
-    // A) 1. Salvar a Foto no Supabase Storage
-        // --- [INÍCIO DO NOVO BLOCO OTIMIZADO] ---
-    
-    // ** 1. NOVA LÓGICA DE COMPRESSÃO E REDIMENSIONAMENTO **
-    
-    // Converte a imagem File para um Blob comprimido
-    const compressedBlob = await new Promise((resolve, reject) => { // <-- Função principal de compressão
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const MAX_WIDTH = 800; // Largura máxima para a foto
-                let width = img.width;
-                let height = img.height;
-
-                // Lógica para redimensionar proporcionalmente a largura máxima
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-
-                // Cria um canvas temporário
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                // Converte o canvas para um Blob JPG comprimido (Qualidade 70%)
-                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
-            };
-            img.onerror = reject; // Trata erro de carregamento da imagem
-            img.src = event.target.result;
-        };
-        reader.onerror = reject; // Trata erro de leitura do arquivo
-        reader.readAsDataURL(fotoFile); // Usa o fotoFile original aqui
-    });
-
-    // Converte o Blob comprimido de volta para um objeto File, mantendo o nome original
-    const compressedFile = new File([compressedBlob], fotoFile.name.replace(/\.[^/.]+$/, "") + '.jpg', {
-        type: 'image/jpeg'
-    });
-    
-    // ** 2. UPLOAD DO ARQUIVO COMPRIMIDO E OBTENÇÃO DA URL **
-    
-    const photoPath = `public/${pedido}_${Date.now()}.jpg`;
-    
-    // Faz o upload do arquivo COMPRIMIDO (compressedFile)
-    const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(photoPath, compressedFile, { // <-- ATENÇÃO: AGORA USA compressedFile
-            cacheControl: '3600',
-            upsert: false
-        });
-
-    if (uploadError) {
-        console.error('Erro ao fazer upload da foto:', uploadError);
-        return alert('Erro ao salvar a foto. Tente novamente.');
-    }
-
-    // Obtém a URL Pública
-    const { data: publicUrlData } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(photoPath);
-
-    const fotoUrl = publicUrlData.publicUrl;
-    const assinaturaBase64 = signaturePad.toDataURL('image/png');
-
-    // --- [FIM DO NOVO BLOCO OTIMIZADO] ---
-    
-    // ... O restante da função (inserção no banco) continua inalterado ...
-
-    // B) Salvar os Dados no Banco de Dados (PostgreSQL)
-    const { error: dbError } = await supabase
-        .from(ENTREGAS_TABLE)
-        .insert([
-            {
-                numero_pedido: pedido,
-                endereco: endereco,
-                nome_cliente: cliente,
-                foto_url: fotoUrl,
-                assinatura_base64: assinaturaBase64
-            }
-        ]);
+    // 1. Inserir a Entrega PRINCIPAL (para obter o ID)
+    let entregaId;
+    const { data: entregaData, error: dbError } = await supabase
+        .from(ENTREGAS_TABLE) 
+        .insert([{
+            numero_pedido: pedido,
+            endereco: endereco,
+            nome_cliente: cliente,
+            assinatura_base64: signaturePad.toDataURL('image/png')
+        }])
+        .select('id') // Pega o ID gerado para linkar as fotos
+        .single();
 
     if (dbError) {
-        console.error('Erro ao salvar no banco:', dbError);
-        return alert('Erro ao registrar a entrega no banco.');
+        console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
+        return alert('Erro ao registrar a entrega principal no banco.');
+    }
+    entregaId = entregaData.id;
+
+    const fotosParaInserir = []; 
+    let uploadSuccessCount = 0;
+    
+    // 2. Loop para processar e enviar CADA FOTO
+    for (const fotoFile of fotoFiles) {
+        try {
+            // Compressão
+            const compressedBlob = await compressImage(fotoFile);
+            
+            const compressedFile = new File([compressedBlob], fotoFile.name.replace(/\.[^/.]+$/, "") + '.jpg', {
+                type: 'image/jpeg'
+            });
+
+            // Upload
+            const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
+            
+            const { error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(photoPath, compressedFile, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) {
+                console.warn(`Falha no upload da foto: ${uploadError.message}.`);
+                continue; 
+            }
+
+            // Obter URL
+            const { data: publicUrlData } = supabase.storage
+                .from(BUCKET_NAME)
+                .getPublicUrl(photoPath);
+
+            // Adiciona a foto à lista para inserção no banco de fotos
+            fotosParaInserir.push({
+                entrega_id: entregaId,
+                url: publicUrlData.publicUrl
+            });
+            uploadSuccessCount++;
+
+        } catch (e) {
+            console.error('Erro durante processamento da foto:', e);
+            continue; // Pula a foto com erro
+        }
     }
 
-    alert('Entrega registrada com sucesso!');
+    // 3. Salvar as URLs das Fotos na tabela 'fotos_comprovantes'
+    if (fotosParaInserir.length > 0) {
+        const { error: fotosError } = await supabase
+            .from(FOTOS_TABLE)
+            .insert(fotosParaInserir);
+
+        if (fotosError) {
+            console.error('Erro ao salvar as URLs das fotos:', fotosError);
+            // NÃO RETORNA 'alert' para não apagar o registro principal, apenas avisa
+            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
+        }
+    }
+
+    alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
+    
     // Limpar o formulário
     document.getElementById('pedido').value = '';
     document.getElementById('endereco').value = '';
@@ -220,52 +266,122 @@ async function submitDelivery() {
     signaturePad.clear();
 }
 
-// ** 5. Função de Visualização (Gerente) **
-async function fetchDeliveries() {
-    document.getElementById('relatorio-list').innerHTML = 'Carregando entregas...';
+
+// ** 6. Funções do Gerente (SELECT, Busca e Detalhes) **
+
+// Função principal de busca
+async function fetchDeliveries(searchQuery = '') {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = 'Carregando pedidos...';
     
-    const { data, error } = await supabase
+    // Faz um SELECT nas entregas, e filtra se houver termo de busca
+    let query = supabase
         .from(ENTREGAS_TABLE)
-        .select('*')
+        .select('id, numero_pedido, nome_cliente, created_at')
         .order('created_at', { ascending: false });
 
+    if (searchQuery) {
+        // Filtra por pedidos que contenham a string de busca (case insensitive)
+        query = query.ilike('numero_pedido', `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
-        console.error('Erro ao carregar entregas:', error);
-        document.getElementById('relatorio-list').innerHTML = 'Erro ao carregar dados.';
+        console.error('Erro ao carregar pedidos:', error);
+        listDiv.innerHTML = 'Erro ao carregar pedidos.';
         return;
     }
 
-    let htmlContent = '';
-    if (data.length === 0) {
-        htmlContent = '<p>Nenhuma entrega registrada ainda.</p>';
-    } else {
-        data.forEach(item => {
-            htmlContent += `
-                <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 4px;">
-                    <h4>Pedido N°: ${item.numero_pedido}</h4>
-                    <p><strong>Endereço:</strong> ${item.endereco}</p>
-                    <p><strong>Recebedor:</strong> ${item.nome_cliente}</p>
-                    <p><strong>Data:</strong> ${new Date(item.created_at).toLocaleString('pt-BR')}</p>
-                    
-                    <h5 style="color: var(--cor-principal);">Foto Comprovante:</h5>
-                    <img src="${item.foto_url}" style="max-width: 100%; height: auto; border: 1px solid #333;">
-                    
-                    <h5 style="color: var(--cor-principal);">Assinatura:</h5>
-                    <img src="${item.assinatura_base64}" style="max-width: 200px; height: 100px; border: 1px solid #333;">
-                </div>
-            `;
-        });
-    }
-
-    document.getElementById('relatorio-list').innerHTML = htmlContent;
+    renderDeliveryList(data);
 }
 
-// Inicia o canvas ao carregar
-window.onload = resizeCanvas;
+// Renderiza a lista de pedidos como menu suspenso
+function renderDeliveryList(deliveries) {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = ''; 
+    
+    if (deliveries.length === 0) {
+        listDiv.innerHTML = `<p>Nenhum pedido encontrado ${document.getElementById('search-input').value ? 'com este número.' : '.'}</p>`;
+        return;
+    }
+
+    deliveries.forEach(item => {
+        const date = new Date(item.created_at).toLocaleString('pt-BR');
+        
+        const card = document.createElement('div');
+        card.className = 'pedido-card';
+        card.innerHTML = `
+            <strong>Pedido N°: ${item.numero_pedido}</strong> - ${item.nome_cliente}
+            <span style="float: right; color: #666; font-size: 0.9em;">${date}</span>
+        `;
+        // Adiciona o evento de clique para expandir detalhes
+        card.onclick = () => showDeliveryDetails(item.id, item.numero_pedido);
+        listDiv.appendChild(card);
+    });
+}
+
+// Dispara a busca ao digitar na barra
+function searchDeliveries() {
+    const query = document.getElementById('search-input').value.trim();
+    // A busca é executada apenas com 3 ou mais caracteres para otimizar
+    if (query.length >= 3 || query.length === 0) {
+        fetchDeliveries(query);
+    }
+}
+
+
+// Mostra os detalhes do pedido clicado
+async function showDeliveryDetails(entregaId, numeroPedido) {
+    const detalhesDiv = document.getElementById('detalhes-pedido');
+    const conteudoDiv = document.getElementById('detalhes-conteudo');
+    
+    document.getElementById('pedido-numero-detalhe').textContent = numeroPedido;
+    detalhesDiv.classList.remove('hidden');
+    conteudoDiv.innerHTML = 'Carregando detalhes...';
+
+    // 1. Puxa os dados da entrega (assinatura, endereço, etc.)
+    const { data: entregaData, error: entregaError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .select('*')
+        .eq('id', entregaId)
+        .single();
+    
+    // 2. Puxa as URLs das fotos relacionadas (Foreign Key)
+    const { data: fotosData, error: fotosError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (entregaError || fotosError) {
+        console.error('Erro ao carregar detalhes:', entregaError || fotosError);
+        conteudoDiv.innerHTML = '<p style="color: red;">Falha ao carregar os detalhes do pedido.</p>';
+        return;
+    }
+    
+    // Geração do HTML de Múltiplas Fotos
+    let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+    if (fotosData.length === 0) {
+        fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
+    } else {
+        fotosData.forEach(foto => {
+            fotosHtml += `<img src="${foto.url}" style="max-width: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
+        });
+    }
+    fotosHtml += '</div>';
+
+    // Monta o Conteúdo Final
+    conteudoDiv.innerHTML = `
+        <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
+        <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
+        <p><strong>Registro:</strong> ${new Date(entregaData.created_at).toLocaleString('pt-BR')}</p>
+        
+        ${fotosHtml}
+        
+        <h4 style="margin-top: 15px;">Assinatura:</h4>
+        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333;">
+    `;
+}
 </script>
-    </script>
 </body>
-
 </html>
-
-

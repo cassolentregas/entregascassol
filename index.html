@@ -251,7 +251,6 @@ function showEntregadorTab(tabName) {
     document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
 
     if (tabName === 'chat') {
-        // Inicializa a área de busca de chat do entregador
         document.getElementById('user-list-chat-entregador').innerHTML = '<p>Digite um e-mail para buscar Gerentes aprovados e iniciar uma conversa.</p>';
         document.getElementById('chat-window-entregador').classList.add('hidden'); 
     }
@@ -478,6 +477,7 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
+                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -1070,13 +1070,16 @@ async function sendMessage() {
     
     if (!content || !currentChatPartnerId) return;
 
+    const messageData = {
+        from_user_id: currentUser.id,
+        to_user_id: currentChatPartnerId,
+        content: content,
+        created_at: new Date().toISOString() 
+    };
+    
     const { error } = await supabase
         .from(MENSAGENS_TABLE)
-        .insert([{
-            from_user_id: currentUser.id,
-            to_user_id: currentChatPartnerId,
-            content: content
-        }]);
+        .insert([messageData]);
 
     if (error) {
         alert('Falha ao enviar mensagem.');
@@ -1084,6 +1087,8 @@ async function sendMessage() {
         return;
     }
     
+    // Exibe a mensagem imediatamente no remetente (Gerente)
+    displayMessage(messageData, 'gerente');
     input.value = '';
 }
 
@@ -1094,13 +1099,16 @@ async function sendMessageEntregador() {
     
     if (!content || !currentChatPartnerId) return;
 
+    const messageData = {
+        from_user_id: currentUser.id,
+        to_user_id: currentChatPartnerId,
+        content: content,
+        created_at: new Date().toISOString() 
+    };
+
     const { error } = await supabase
         .from(MENSAGENS_TABLE)
-        .insert([{
-            from_user_id: currentUser.id,
-            to_user_id: currentChatPartnerId,
-            content: content
-        }]);
+        .insert([messageData]);
 
     if (error) {
         alert('Falha ao enviar mensagem.');
@@ -1108,13 +1116,16 @@ async function sendMessageEntregador() {
         return;
     }
     
+    // Exibe a mensagem imediatamente no remetente (Entregador)
+    displayMessage(messageData, 'entregador');
     input.value = '';
 }
 
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 
+// NOVO LISTENER: Ativa a busca de usuários para o entregador ao digitar
+document.getElementById('chat-search-input-entregador').addEventListener('keyup', searchUsersForChatEntregador);
 </script>
 </body>
 </html>
-

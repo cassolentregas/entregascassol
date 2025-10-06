@@ -155,7 +155,6 @@ function showLogin() {
 
 // ** 3. Lógica de Cadastro e Aprovação **
 
-// Substitua esta função no seu bloco <script>:
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -166,13 +165,12 @@ async function handleRegister() {
         return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
-    // 1. Cadastrar o usuário (logando-o)
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+    // 1. Cadastrar o usuário no Supabase Auth
+    const { error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
         options: {
-            data: { nome: nome, nivel: nivel },
-            redirectTo: window.location.origin 
+            data: { nome: nome, nivel: nivel }
         }
     });
 
@@ -182,55 +180,6 @@ async function handleRegister() {
         }
         return alert('Erro ao cadastrar. Tente novamente.');
     }
-
-    const userId = authData.user.id;
-    let attempts = 0;
-    const maxAttempts = 10;
-    let sessionReady = false;
-
-    // 2. Espera ATIVA pelo token de sessão (Polling)
-    // CRÍTICO: Garante que o Supabase Client saiba quem é o usuário antes de inserir.
-    while (!sessionReady && attempts < maxAttempts) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user.id === userId) {
-            sessionReady = true;
-            break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 500)); // Pausa de 500ms
-        attempts++;
-    }
-
-    if (!sessionReady) {
-        alert("Erro de autenticação: Falha ao obter o token de login para completar o cadastro. Tente novamente.");
-        await supabase.auth.signOut();
-        return;
-    }
-    
-    // 3. INSERÇÃO DO PERFIL (Ocorre agora que o token foi confirmado)
-    if (authData.user) {
-        const { error: profileInsertError } = await supabase
-            .from(PERFIS_TABLE)
-            .insert([{
-                id: authData.user.id,
-                email: authData.user.email,
-                nivel_acesso: nivel, 
-                status: 'PENDENTE'
-            }]);
-        
-        if (profileInsertError) {
-             console.error('Erro de inserção direta do perfil:', profileInsertError);
-             alert('Erro crítico ao salvar seu perfil PENDENTE. Contate o administrador.');
-             await supabase.auth.signOut();
-             return;
-        }
-    }
-
-    // 4. Desloga o usuário e informa a pendência
-    await supabase.auth.signOut();
-    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
-    showLogin(); 
-}
-
     
     alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador. Você receberá um e-mail de confirmação (necessário clicar nele) e depois o administrador fará a liberação.");
     showLogin(); 
@@ -822,4 +771,3 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
-

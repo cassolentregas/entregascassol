@@ -85,7 +85,7 @@
     </div>
 
     <script>
-// ** 1. Configuração do Supabase (Chaves INJETADAS) **
+// ** 1. Configuração do Supabase **
 const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
 
@@ -359,13 +359,12 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
     } else {
         fotosData.forEach(foto => {
-            // CORREÇÃO: Altura máxima definida na imagem da foto para evitar estouro no PDF
             fotosHtml += `<img src="${foto.url}" style="max-width: 150px; max-height: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
         });
     }
     fotosHtml += '</div>';
 
-    // Monta o Conteúdo Final 
+    // Monta o Conteúdo Final (Assinatura com estilo inline corrigido)
     conteudoDiv.innerHTML = `
         <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
         <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
@@ -374,7 +373,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         ${fotosHtml}
         
         <h4 style="margin-top: 15px;">Assinatura:</h4>
-        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333;">
+        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333; padding: 5px; margin-bottom: 10px;">
     `;
 }
 

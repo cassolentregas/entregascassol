@@ -440,21 +440,21 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         
         <h4 style="margin-top: 15px; margin-bottom: 5px;">Assinatura:</h4>
         <div style="
-            display: flex; 
-            justify-content: center; 
-            align-items: center;
-            width: 100%; 
+            margin: 0 auto 20px auto; 
+            max-width: 270px; 
+            box-sizing: border-box; 
             padding: 10px; 
             border: 1px solid #ccc; 
             background-color: white; 
-            margin-bottom: 20px;
+            text-align: center;
         ">
             <img 
                 src="${entregaData.assinatura_base64}" 
                 style="
-                    max-width: 250px; 
+                    max-width: 100%; 
                     height: 100px; 
                     padding: 0; 
+                    display: block; 
                 "
             >
         </div>

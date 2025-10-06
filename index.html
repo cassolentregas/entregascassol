@@ -34,7 +34,15 @@
         .aprovacao-card button { width: auto; margin: 5px 5px 0 0; }
         
         /* Estilos do Chat */
-        #chat-messages { height: 200px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column;}
+        #chat-messages, #chat-messages-entregador { 
+            height: 200px; 
+            overflow-y: scroll; 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            display: flex; 
+            flex-direction: column;
+        }
         .message-right { text-align: right; }
         .message-left { text-align: left; }
         .chat-bubble {
@@ -78,23 +86,51 @@
 
 
         <div id="entregador-area" class="hidden">
-            <h2>Registro de Entrega</h2>
-            <input type="text" id="pedido" placeholder="Número do Pedido" required>
-            <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
-            <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
-            
-            <label>Fotos da Entrega (mínimo 1):</label>
-            <div id="photos-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+            <h2>Área do Entregador</h2>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="tab-registro-btn" onclick="showEntregadorTab('registro')" style="width: auto; background-color: #007bff;">Registro</button>
+                <button id="tab-chat-entregador-btn" onclick="showEntregadorTab('chat')" style="width: auto; background-color: #0056b3;">Chat Privado</button>
             </div>
-            <input type="file" id="single-photo-input" accept="image/*" capture="camera" class="hidden">
-            <button type="button" onclick="document.getElementById('single-photo-input').click()">Adicionar Nova Foto</button>
-            <div id="photo-status" style="margin-bottom: 15px; color: #dc3545;"></div> 
-            <label>Assinatura do Cliente:</label>
-            <canvas id="signature-pad"></canvas>
-            <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
-            <br><br>
-            
-            <button onclick="submitDelivery()">Registrar Entrega</button>
+
+            <div id="tab-registro-content" class="tab-content">
+                <h3>Registro de Entrega</h3>
+                
+                <input type="text" id="pedido" placeholder="Número do Pedido" required>
+                <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
+                <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
+                
+                <label>Fotos da Entrega (mínimo 1):</label>
+                <div id="photos-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;"></div>
+                <input type="file" id="single-photo-input" accept="image/*" capture="camera" class="hidden">
+                <button type="button" onclick="document.getElementById('single-photo-input').click()">Adicionar Nova Foto</button>
+                <div id="photo-status" style="margin-bottom: 15px; color: #dc3545;"></div> 
+
+                <label>Assinatura do Cliente:</label>
+                <canvas id="signature-pad"></canvas>
+                <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
+                <br><br>
+                
+                <button onclick="submitDelivery()">Registrar Entrega</button>
+            </div>
+
+            <div id="tab-chat-entregador-content" class="tab-content hidden">
+                <h3>Chat Privado</h3>
+                
+                <input type="text" id="chat-search-input-entregador" placeholder="Buscar Gerente por E-mail..." onkeyup="searchUsersForChatEntregador()">
+                
+                <div id="user-list-chat-entregador" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px;">
+                    <p>Digite um e-mail para buscar Gerentes aprovados e iniciar uma conversa.</p>
+                </div>
+
+                <div id="chat-window-entregador" class="hidden" style="border: 1px solid #007bff; padding: 10px; border-radius: 4px;">
+                    <h4 id="chat-partner-email-entregador">Conversando com:</h4>
+                    <div id="chat-messages-entregador">
+                        </div>
+                    <textarea id="chat-message-input-entregador" placeholder="Digite sua mensagem..." rows="2" style="margin-bottom: 5px;"></textarea>
+                    <button onclick="sendMessageEntregador()" style="width: 100%;">Enviar</button>
+                </div>
+            </div>
         </div>
 
         <div id="gerente-area" class="hidden">
@@ -190,6 +226,7 @@ window.onload = function() {
 };
 window.addEventListener('resize', resizeCanvas);
 
+
 // Funções Auxiliares de UI
 function showRegister() {
     document.getElementById('login-area').classList.add('hidden');
@@ -199,6 +236,27 @@ function showLogin() {
     document.getElementById('login-area').classList.remove('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
 }
+// NOVO: Navegação do Entregador
+function showEntregadorTab(tabName) {
+    const tabs = ['registro', 'chat'];
+    const activeColor = '#007bff';
+    const inactiveColor = '#0056b3';
+
+    tabs.forEach(tab => {
+        document.getElementById(`tab-${tab}-content`).classList.add('hidden');
+        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = inactiveColor;
+    });
+
+    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
+    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
+
+    if (tabName === 'chat') {
+        // Garante que o chat esteja pronto para uso
+        document.getElementById('user-list-chat-entregador').innerHTML = '<p>Digite um e-mail para buscar e iniciar uma conversa.</p>';
+        document.getElementById('chat-window-entregador').classList.add('hidden'); 
+    }
+}
+// MODIFICADA: Navegação do Gerente
 function showGerenteTab(tabName) {
     const tabs = ['aprovacao', 'historico', 'chat'];
     const activeColor = '#007bff';
@@ -242,11 +300,13 @@ async function checkUserSession() {
         document.getElementById('login-area').classList.add('hidden');
         document.getElementById('cadastro-area').classList.add('hidden');
 
+        // Carrega a interface com a aba padrão
         if (currentUser.nivel === 1) {
             document.getElementById('entregador-area').classList.remove('hidden');
+            showEntregadorTab('registro'); // Entregador começa no Registro
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
-            showGerenteTab('historico'); // ABRE O HISTÓRICO AO RECARREGAR
+            showGerenteTab('historico'); // Gerente começa no Histórico
         }
     } else {
         showLogin();
@@ -318,10 +378,9 @@ async function handleLogin() {
     
     if (currentUser.nivel === 1) {
         document.getElementById('entregador-area').classList.remove('hidden');
-        document.getElementById('gerente-area').classList.add('hidden');
+        showEntregadorTab('registro'); 
     } else if (currentUser.nivel === 2) {
         document.getElementById('gerente-area').classList.remove('hidden');
-        document.getElementById('entregador-area').classList.add('hidden');
         showGerenteTab('historico'); 
     }
 }
@@ -347,7 +406,7 @@ async function loadAprovacaoPanel() {
     
     const { data, error } = await supabase
         .from(PERFIS_TABLE)
-        .select('id, email, nivel_acesso, created_at')
+        .select('id, email, nivel_acesso, created_at') 
         .eq('status', 'PENDENTE')
         .order('created_at', { ascending: true }); 
 
@@ -420,6 +479,7 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
+                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -708,7 +768,6 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     `;
 }
 
-// ** NOVO: Função para Download de PDF **
 async function downloadComprovante() {
     const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
@@ -747,7 +806,6 @@ async function downloadComprovante() {
 }
 
 
-// ** NOVO: Função para Excluir um Pedido **
 async function deleteDelivery(entregaId, numeroPedido) {
     if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
         return;
@@ -872,7 +930,7 @@ async function searchUsersForChat() {
         .from(PERFIS_TABLE)
         .select('id, email, nivel_acesso')
         .eq('status', 'APROVADO')
-        .neq('id', currentUser.id) // Exclui meu próprio perfil
+        .neq('id', currentUser.id) 
         .ilike('email', `%${searchQuery}%`); 
 
     if (error || data.length === 0) {
@@ -896,19 +954,65 @@ async function searchUsersForChat() {
     });
 }
 
-async function startChat(partnerId, partnerEmail) {
+// NOVO: Busca de Chat para Entregador (apenas Gerentes)
+async function searchUsersForChatEntregador() {
+    const searchQuery = document.getElementById('chat-search-input-entregador').value.trim();
+    const userListDiv = document.getElementById('user-list-chat-entregador');
+    
+    if (searchQuery.length < 3) {
+        userListDiv.innerHTML = '<p>Digite pelo menos 3 caracteres do e-mail.</p>';
+        return;
+    }
+    
+    userListDiv.innerHTML = 'Buscando...';
+
+    // O Entregador só busca Gerentes (Nível 2) que estão APROVADOS
+    const { data, error } = await supabase
+        .from(PERFIS_TABLE)
+        .select('id, email, nivel_acesso')
+        .eq('status', 'APROVADO')
+        .eq('nivel_acesso', 2) 
+        .neq('id', currentUser.id) 
+        .ilike('email', `%${searchQuery}%`); 
+
+    if (error || data.length === 0) {
+        userListDiv.innerHTML = '<p>Nenhum Gerente encontrado com esse e-mail.</p>';
+        return;
+    }
+
+    userListDiv.innerHTML = '';
+    data.forEach(user => {
+        const item = document.createElement('div');
+        item.className = 'pedido-card';
+        item.style.cursor = 'pointer';
+        item.onclick = () => startChat(user.id, user.email, 'entregador'); // Passa o UI ID
+        item.innerHTML = `
+            <strong>${user.email}</strong> 
+            <span style="color: #007bff;">(Gerente)</span>
+            <button style="width: auto; padding: 5px; margin: 0; background-color: #28a745;">Iniciar Chat</button>
+        `;
+        userListDiv.appendChild(item);
+    });
+}
+
+
+async function startChat(partnerId, partnerEmail, uiId = 'gerente') {
     currentChatPartnerId = partnerId;
-    document.getElementById('chat-partner-email').textContent = `Conversando com: ${partnerEmail}`;
-    document.getElementById('chat-window').classList.remove('hidden');
+    
+    const partnerEmailElement = document.getElementById(`chat-partner-email${uiId === 'entregador' ? '-entregador' : ''}`);
+    const chatWindowElement = document.getElementById(`chat-window${uiId === 'entregador' ? '-entregador' : ''}`);
+    const chatMessagesDiv = document.getElementById(`chat-messages${uiId === 'entregador' ? '-entregador' : ''}`);
+    
+    partnerEmailElement.textContent = `Conversando com: ${partnerEmail}`;
+    chatWindowElement.classList.remove('hidden');
     
     if (unsubscribeRealtime) {
         unsubscribeRealtime.unsubscribe();
     }
     
-    const chatMessagesDiv = document.getElementById('chat-messages');
     chatMessagesDiv.innerHTML = 'Carregando mensagens...';
 
-    await fetchChatHistory(partnerId);
+    await fetchChatHistory(partnerId, uiId);
 
     unsubscribeRealtime = supabase
         .channel(`chat_${currentUser.id}_${partnerId}`) 
@@ -919,7 +1023,7 @@ async function startChat(partnerId, partnerEmail) {
             filter: `or(from_user_id.eq.${partnerId},to_user_id.eq.${partnerId})` 
         }, payload => {
             if (payload.new.from_user_id === partnerId || payload.new.to_user_id === currentUser.id) {
-                displayMessage(payload.new);
+                displayMessage(payload.new, uiId); 
             }
         })
         .subscribe();
@@ -927,14 +1031,14 @@ async function startChat(partnerId, partnerEmail) {
     chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
 }
 
-async function fetchChatHistory(partnerId) {
+async function fetchChatHistory(partnerId, uiId = 'gerente') {
     const { data: messages, error } = await supabase
         .from(MENSAGENS_TABLE)
         .select('*')
         .or(`and(from_user_id.eq.${currentUser.id},to_user_id.eq.${partnerId}),and(from_user_id.eq.${partnerId},to_user_id.eq.${currentUser.id})`)
         .order('created_at', { ascending: true });
 
-    const chatMessagesDiv = document.getElementById('chat-messages');
+    const chatMessagesDiv = document.getElementById(`chat-messages${uiId === 'entregador' ? '-entregador' : ''}`);
     chatMessagesDiv.innerHTML = ''; 
 
     if (error) {
@@ -942,11 +1046,11 @@ async function fetchChatHistory(partnerId) {
         return;
     }
 
-    messages.forEach(displayMessage);
+    messages.forEach(msg => displayMessage(msg, uiId));
 }
 
-function displayMessage(message) {
-    const chatMessagesDiv = document.getElementById('chat-messages');
+function displayMessage(message, uiId = 'gerente') {
+    const chatMessagesDiv = document.getElementById(`chat-messages${uiId === 'entregador' ? '-entregador' : ''}`);
     const isMe = message.from_user_id === currentUser.id;
     
     const container = document.createElement('div');
@@ -964,6 +1068,30 @@ function displayMessage(message) {
 
 async function sendMessage() {
     const input = document.getElementById('chat-message-input');
+    const content = input.value.trim();
+    
+    if (!content || !currentChatPartnerId) return;
+
+    const { error } = await supabase
+        .from(MENSAGENS_TABLE)
+        .insert([{
+            from_user_id: currentUser.id,
+            to_user_id: currentChatPartnerId,
+            content: content
+        }]);
+
+    if (error) {
+        alert('Falha ao enviar mensagem.');
+        console.error('Erro ao enviar:', error);
+        return;
+    }
+    
+    input.value = '';
+}
+
+// NOVO: Função de Enviar Mensagem do Entregador
+async function sendMessageEntregador() {
+    const input = document.getElementById('chat-message-input-entregador');
     const content = input.value.trim();
     
     if (!content || !currentChatPartnerId) return;

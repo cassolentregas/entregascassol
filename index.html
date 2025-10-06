@@ -155,8 +155,6 @@ function showLogin() {
 
 // ** 3. Lógica de Cadastro e Aprovação **
 
-
-// Substitua esta função no seu bloco <script>:
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -167,12 +165,13 @@ async function handleRegister() {
         return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
-    // 1. Cadastrar o usuário no Supabase Auth (logando-o)
+    // 1. Cadastrar o usuário e logá-lo automaticamente
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
         options: {
             data: { nome: nome, nivel: nivel },
+            // Opção para forçar o Supabase a processar o token de sessão
             redirectTo: window.location.origin 
         }
     });
@@ -184,7 +183,10 @@ async function handleRegister() {
         return alert('Erro ao cadastrar. Tente novamente.');
     }
     
-    // 2. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated' sem deslogamento)
+    // CRÍTICO: Pausa para garantir que o token de sessão seja salvo pelo navegador
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
+
+    // 2. INSERÇÃO CRÍTICA DO PERFIL PENDENTE (AGORA O USUÁRIO TEM UM TOKEN VÁLIDO)
     if (authData.user) {
         const { error: profileInsertError } = await supabase
             .from(PERFIS_TABLE)
@@ -198,17 +200,18 @@ async function handleRegister() {
         if (profileInsertError) {
              console.error('Erro de inserção direta do perfil:', profileInsertError);
              alert('Erro crítico ao salvar seu perfil PENDENTE. Contate o administrador.');
-             // Desloga para evitar que o usuário entre no sistema sem perfil
              await supabase.auth.signOut();
              return;
         }
     }
 
-    // 3. Informa a pendência e volta ao login.
+    // 3. Desloga o usuário e informa a pendência
+    await supabase.auth.signOut();
     alert("Cadastro enviado com sucesso! Por favor, clique no link de confirmação enviado para o seu e-mail e aguarde a aprovação final do administrador.");
     showLogin(); 
 }
 
+// Substitua esta função no seu bloco <script>:
 
 async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
@@ -796,3 +799,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

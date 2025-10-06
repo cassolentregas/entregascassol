@@ -236,25 +236,36 @@ function showLogin() {
     document.getElementById('login-area').classList.remove('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
 }
-// NOVO: Navegação do Entregador
+// NOVO: Navegação do Entregador (FORÇANDO O DISPLAY CSS)
 function showEntregadorTab(tabName) {
     const tabs = ['registro', 'chat'];
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
     tabs.forEach(tab => {
-        document.getElementById(`tab-${tab}-content`).classList.add('hidden');
-        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = inactiveColor;
+        const contentDiv = document.getElementById(`tab-${tab}-content`);
+        const button = document.getElementById(`tab-${tab}-btn`);
+        
+        // Esconde o conteúdo e desativa o botão
+        contentDiv.classList.add('hidden');
+        contentDiv.style.display = 'none'; // Garantir que está escondido
+        button.style.backgroundColor = inactiveColor;
     });
 
-    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
-    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
+    // Mostra o conteúdo ativo e ativa o botão
+    const activeContentDiv = document.getElementById(`tab-${tabName}-content`);
+    const activeButton = document.getElementById(`tab-${tabName}-btn`);
+
+    activeContentDiv.classList.remove('hidden');
+    activeContentDiv.style.display = 'block'; // Garantir que está visível
+    activeButton.style.backgroundColor = activeColor;
 
     if (tabName === 'chat') {
         document.getElementById('user-list-chat-entregador').innerHTML = '<p>Digite um e-mail para buscar Gerentes aprovados e iniciar uma conversa.</p>';
         document.getElementById('chat-window-entregador').classList.add('hidden'); 
     }
 }
+
 // MODIFICADA: Navegação do Gerente
 function showGerenteTab(tabName) {
     const tabs = ['aprovacao', 'historico', 'chat'];
@@ -1129,3 +1140,4 @@ document.getElementById('chat-search-input-entregador').addEventListener('keyup'
 </script>
 </body>
 </html>
+

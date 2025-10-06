@@ -30,7 +30,6 @@
         .pedido-card:hover { background-color: #e0e0e0; }
         .delete-btn { width: auto; padding: 5px 10px; margin-left: 10px; background-color: #dc3545; }
         .delete-btn:hover { background-color: #c82333; }
-        /* OBS: O estilo de assinatura foi movido para inline no JS */
     </style>
 </head>
 <body>
@@ -86,7 +85,7 @@
     </div>
 
     <script>
-// ** 1. Configuração do Supabase **
+// ** 1. Configuração do Supabase (Chaves INJETADAS) **
 const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
 
@@ -360,12 +359,13 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
     } else {
         fotosData.forEach(foto => {
-            fotosHtml += `<img src="${foto.url}" style="max-width: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
+            // CORREÇÃO: Altura máxima definida na imagem da foto para evitar estouro no PDF
+            fotosHtml += `<img src="${foto.url}" style="max-width: 150px; max-height: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
         });
     }
     fotosHtml += '</div>';
 
-    // Monta o Conteúdo Final (Assinatura com estilo inline para FIXAR o PDF)
+    // Monta o Conteúdo Final 
     conteudoDiv.innerHTML = `
         <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
         <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
@@ -380,20 +380,20 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
 
 // ** NOVO: Função para Download de PDF **
 async function downloadComprovante() {
-    const detalhesDiv = document.getElementById('detalhes-pedido');
+    // Captura o div interno para excluir o título e o botão de download do PDF
+    const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
 
-    if (detalhesDiv.classList.contains('hidden')) {
+    if (document.getElementById('detalhes-pedido').classList.contains('hidden')) {
         return alert('Selecione um pedido primeiro.');
     }
 
-    // Oculta o botão de download dentro da área de detalhes para que ele não apareça no PDF
+    // Oculta o botão de download
     document.getElementById('download-btn').style.display = 'none';
 
     try {
-        // Gera o canvas do conteúdo
-        const canvas = await html2canvas(detalhesDiv, {
-            scale: 2, // Aumenta a resolução
+        const canvas = await html2canvas(elementoParaCapturar, {
+            scale: 2, 
             useCORS: true 
         });
 
@@ -406,7 +406,6 @@ async function downloadComprovante() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        // Adiciona a imagem no PDF (ajustando a altura para caber)
         pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         
         pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);

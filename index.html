@@ -1082,7 +1082,7 @@ async function sendMessage() {
         .insert([messageData]);
 
     if (error) {
-        alert('Falha ao enviar mensagem.');
+        alert('Falha ao enviar mensagem. Verifique a Política RLS de INSERT.');
         console.error('Erro ao enviar:', error);
         return;
     }
@@ -1111,7 +1111,7 @@ async function sendMessageEntregador() {
         .insert([messageData]);
 
     if (error) {
-        alert('Falha ao enviar mensagem.');
+        alert('Falha ao enviar mensagem. Verifique a Política RLS de INSERT.');
         console.error('Erro ao enviar:', error);
         return;
     }

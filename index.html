@@ -476,4 +476,134 @@ async function downloadComprovante() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        
+        pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
+
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        alert('Houve um erro ao gerar o comprovante. Verifique o console.');
+    } finally {
+        // Torna o botão visível novamente
+        document.getElementById('download-btn').style.display = 'block';
+    }
+}
+
+
+// ** NOVO: Função para Excluir um Pedido **
+async function deleteDelivery(entregaId, numeroPedido) {
+    if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
+        return;
+    }
+
+    // 1. Buscar fotos para obter os caminhos do Storage
+    const { data: fotosData, error: fotosFetchError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (fotosFetchError) {
+        console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
+        alert('Erro ao buscar fotos. Exclusão abortada.');
+        return;
+    }
+    
+    // 2. Excluir arquivos do Supabase Storage
+    const filesToDelete = fotosData.map(foto => {
+        // Extrai o caminho do arquivo após o bucket name (comprovantes/)
+        const parts = foto.url.split(`${BUCKET_NAME}/`);
+        return parts.length > 1 ? parts[1] : null;
+    }).filter(path => path); 
+
+    if (filesToDelete.length > 0) {
+        const { error: storageDelError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .remove(filesToDelete);
+        
+        if (storageDelError) {
+            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
+            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
+        }
+    }
+    
+    // 3. Excluir registros do banco (ordem: filhos primeiro, pai depois)
+    
+    // Excluir registros da tabela 'fotos_comprovantes' (FILHO)
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .eq('entrega_id', entregaId);
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir registros de fotos:', fotosDelError);
+        alert(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
+        return;
+    }
+
+    // Excluir registro principal da tabela 'entregas' (PAI)
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .eq('id', entregaId);
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir registro principal:', entregaDelError);
+        alert(`Erro ao excluir pedido principal ${numeroPedido}.`);
+        return;
+    }
+
+    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+    
+    // Atualiza a lista
+    fetchDeliveries(document.getElementById('search-input').value.trim());
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** NOVO: Função para Excluir TODOS os Pedidos **
+async function deleteAllDeliveries() {
+    if (!confirm("CONFIRMAÇÃO EXTREMA: Você está prestes a EXCLUIR TODOS OS PEDIDOS E FOTOS. Esta ação é IRREVERSÍVEL.")) {
+        return;
+    }
+    const confirmationText = prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO' na caixa abaixo:");
+    
+    if (confirmationText !== 'DELETAR TUDO') {
+        return alert('Exclusão total cancelada.');
+    }
+
+    // 1. Excluir todos os registros de fotos
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir TODAS as fotos:', fotosDelError);
+        return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
+    }
+    
+    // 2. Excluir todos os registros da tabela 'entregas'
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
+        return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
+    }
+
+    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
+    
+    // Atualiza a lista
+    fetchDeliveries();
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** EVENT LISTENER para a nova função de foto sequencial **
+document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+
+</script>
+</body>
+</html>
+
+

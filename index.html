@@ -184,55 +184,63 @@ async function handleRegister() {
     alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador. Você receberá um e-mail de confirmação (necessário clicar nele) e depois o administrador fará a liberação.");
     showLogin(); 
 }
-
-async function handleLogin() {
-    const email = document.getElementById('login-email').value.trim();
-    const senha = document.getElementById('login-senha').value.trim();
-
-    // 1. Fazer login no Supabase Auth
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+async function handleRegister() {
+    const nome = document.getElementById('reg-nome').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const senha = document.getElementById('reg-senha').value.trim();
+    const nivel = parseInt(document.getElementById('reg-nivel').value);
+    
+    if (!nome || !email || senha.length < 6) {
+        return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
+    }
+    
+    // 1. Cadastrar o usuário e logá-lo automaticamente
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
+        options: {
+            data: { nome: nome, nivel: nivel },
+            // Opção para forçar o Supabase a processar o token de sessão
+            redirectTo: window.location.origin 
+        }
     });
 
-    if (signInError) {
-        return alert('Falha no login. Verifique e-mail e senha.');
+    if (signUpError) {
+        if (signUpError.message.includes('already registered')) {
+            return alert('Este e-mail já está cadastrado. Tente fazer login.');
+        }
+        return alert('Erro ao cadastrar. Tente novamente.');
     }
-
-    const userId = data.user.id;
-
-    // 2. Consultar a tabela 'perfis' para verificar o STATUS e NÍVEL
-    const { data: profileData, error: profileError } = await supabase
-        .from(PERFIS_TABLE)
-        .select('status, nivel_acesso')
-        .eq('id', userId)
-        .single();
     
-    if (profileError || !profileData) {
-        return alert('Seu perfil não foi encontrado. Contate o administrador.');
+    // CRÍTICO: Pausa para garantir que o token de sessão seja salvo pelo navegador
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
+
+    // 2. INSERÇÃO CRÍTICA DO PERFIL PENDENTE (AGORA O USUÁRIO TEM UM TOKEN VÁLIDO)
+    if (authData.user) {
+        const { error: profileInsertError } = await supabase
+            .from(PERFIS_TABLE)
+            .insert([{
+                id: authData.user.id,
+                email: authData.user.email,
+                nivel_acesso: nivel, 
+                status: 'PENDENTE'
+            }]);
+        
+        if (profileInsertError) {
+             console.error('Erro de inserção direta do perfil:', profileInsertError);
+             alert('Erro crítico ao salvar seu perfil PENDENTE. Contate o administrador.');
+             await supabase.auth.signOut();
+             return;
+        }
     }
 
-    if (profileData.status !== 'APROVADO') {
-        // Logica de BLOQUEIO POR STATUS
-        await supabase.auth.signOut(); // Desloga o usuário imediatamente
-        return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
-    }
-
-    // Login APROVADO
-    currentUser = { id: userId, nivel: profileData.nivel_acesso };
-    document.getElementById('login-area').classList.add('hidden');
-    document.getElementById('cadastro-area').classList.add('hidden');
-    
-    if (currentUser.nivel === 1) {
-        document.getElementById('entregador-area').classList.remove('hidden');
-        document.getElementById('gerente-area').classList.add('hidden');
-    } else if (currentUser.nivel === 2) {
-        document.getElementById('gerente-area').classList.remove('hidden');
-        document.getElementById('entregador-area').classList.add('hidden');
-        loadAprovacaoPanel(); // Carrega a lista de usuários pendentes
-        fetchDeliveries(); // Carrega o histórico
-    }
+    // 3. Desloga o usuário e informa a pendência
+    await supabase.auth.signOut();
+    alert("Cadastro enviado com sucesso! Por favor, clique no link de confirmação enviado para o seu e-mail e aguarde a aprovação final do administrador.");
+    showLogin(); 
 }
+
+
 
 async function handleLogout() {
     await supabase.auth.signOut();
@@ -771,3 +779,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

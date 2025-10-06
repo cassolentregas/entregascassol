@@ -43,7 +43,7 @@
             max-width: 80%;
             display: inline-block;
             margin: 3px 0;
-            word-wrap: break-word; /* Garante que mensagens longas quebrem a linha */
+            word-wrap: break-word; 
         }
         .me { background-color: #dcf8c6; }
         .partner { background-color: #e5e5ea; }
@@ -101,28 +101,19 @@
             <h2>Painel de Gerenciamento</h2>
 
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <button id="tab-aprovacao-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #007bff;">Aprovações</button>
-                <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #0056b3;">Histórico</button>
+                <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #007bff;">Histórico</button>
+                <button id="tab-aprovacao-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #0056b3;">Aprovações</button>
                 <button id="tab-chat-btn" onclick="showGerenteTab('chat')" style="width: auto; background-color: #0056b3;">Chat Privado</button>
             </div>
 
-            <div id="tab-aprovacao-content" class="tab-content">
-                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                    <h3>Aprovação de Usuários Pendentes</h3>
-                    <div id="aprovacao-list">
-                        <p>Carregando solicitações...</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="tab-historico-content" class="tab-content hidden">
+            <div id="tab-historico-content" class="tab-content">
                 <h3>Histórico de Entregas</h3>
                 <div style="margin-bottom: 20px; display: flex; gap: 10px;">
                     <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
                     <button onclick="deleteAllDeliveries()" style="width: auto; background-color: #dc3545;">Excluir TUDO</button>
                 </div>
                 <div id="historico-list">
-                    <p>Busque por um número de pedido ou clique em Histórico.</p>
+                    <p>Carregando histórico...</p>
                 </div>
                 <hr style="margin: 20px 0;">
                 <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
@@ -134,6 +125,15 @@
                 </div>
             </div>
 
+            <div id="tab-aprovacao-content" class="tab-content hidden">
+                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                    <h3>Aprovação de Usuários Pendentes</h3>
+                    <div id="aprovacao-list">
+                        <p>Carregando solicitações...</p>
+                    </div>
+                </div>
+            </div>
+            
             <div id="tab-chat-content" class="tab-content hidden">
                 <h3>Chat Privado</h3>
                 
@@ -164,15 +164,15 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
 const FOTOS_TABLE = 'fotos_comprovantes'; 
-const PERFIS_TABLE = 'perfis';
-const MENSAGENS_TABLE = 'mensagens'; // Nova Tabela de Chat
+const PERFIS_TABLE = 'perfis'; 
+const MENSAGENS_TABLE = 'mensagens'; 
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
 let photosToUpload = []; 
 let currentChatPartnerId = null; 
-let unsubscribeRealtime = null; // Gerencia a conexão em tempo real
+let unsubscribeRealtime = null; 
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -182,8 +182,13 @@ function resizeCanvas() {
     canvas.height = canvas.offsetHeight;
     signaturePad.clear();
 }
+
+// ** MUDANÇA CRÍTICA: Chama checkUserSession ao carregar a página **
+window.onload = function() {
+    resizeCanvas();
+    checkUserSession(); 
+};
 window.addEventListener('resize', resizeCanvas);
-window.onload = resizeCanvas;
 
 // Funções Auxiliares de UI
 function showRegister() {
@@ -196,25 +201,57 @@ function showLogin() {
 }
 function showGerenteTab(tabName) {
     const tabs = ['aprovacao', 'historico', 'chat'];
+    const activeColor = '#007bff';
+    const inactiveColor = '#0056b3';
+
     tabs.forEach(tab => {
         document.getElementById(`tab-${tab}-content`).classList.add('hidden');
-        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = '#0056b3';
+        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = inactiveColor;
     });
 
     document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
-    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = '#007bff';
+    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
 
     if (tabName === 'aprovacao') loadAprovacaoPanel();
     if (tabName === 'historico') fetchDeliveries();
     if (tabName === 'chat') {
         document.getElementById('user-list-chat').innerHTML = '<p>Digite um e-mail para buscar e iniciar uma conversa.</p>';
-        // Garante que a janela de chat esteja escondida ao trocar para a aba Chat
         document.getElementById('chat-window').classList.add('hidden'); 
     }
 }
 
+// ** 3. Lógica de Persistência, Cadastro e Login **
 
-// ** 3. Lógica de Cadastro e Aprovação **
+async function checkUserSession() {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+        const { data: profileData, error: profileError } = await supabase
+            .from(PERFIS_TABLE)
+            .select('status, nivel_acesso, email')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError || profileData.status !== 'APROVADO') {
+            await supabase.auth.signOut();
+            showLogin();
+            return;
+        }
+
+        currentUser = { id: user.id, nivel: profileData.nivel_acesso, email: profileData.email };
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('cadastro-area').classList.add('hidden');
+
+        if (currentUser.nivel === 1) {
+            document.getElementById('entregador-area').classList.remove('hidden');
+        } else if (currentUser.nivel === 2) {
+            document.getElementById('gerente-area').classList.remove('hidden');
+            showGerenteTab('historico'); // ABRE O HISTÓRICO AO RECARREGAR
+        }
+    } else {
+        showLogin();
+    }
+}
 
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
@@ -260,10 +297,9 @@ async function handleLogin() {
 
     const userId = data.user.id;
 
-    // 2. Consultar a tabela 'perfis' para verificar o STATUS e NÍVEL
     const { data: profileData, error: profileError } = await supabase
         .from(PERFIS_TABLE)
-        .select('status, nivel_acesso')
+        .select('status, nivel_acesso, email')
         .eq('id', userId)
         .single();
     
@@ -276,8 +312,7 @@ async function handleLogin() {
         return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
     }
 
-    // Login APROVADO
-    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: email };
+    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: profileData.email };
     document.getElementById('login-area').classList.add('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
     
@@ -287,13 +322,13 @@ async function handleLogin() {
     } else if (currentUser.nivel === 2) {
         document.getElementById('gerente-area').classList.remove('hidden');
         document.getElementById('entregador-area').classList.add('hidden');
-        showGerenteTab('aprovacao'); // Abre a aba de aprovação por padrão
+        showGerenteTab('historico'); 
     }
 }
 
 async function handleLogout() {
     if (unsubscribeRealtime) {
-        unsubscribeRealtime.unsubscribe(); // Desliga o chat realtime
+        unsubscribeRealtime.unsubscribe(); 
     }
     await supabase.auth.signOut();
     currentUser = null;
@@ -304,7 +339,7 @@ async function handleLogout() {
     document.getElementById('photos-preview').innerHTML = ''; 
 }
 
-// ** Lógica do Painel de Aprovação (Gerente/Nível 2) **
+// ** 4. Lógica do Painel de Aprovação (Gerente/Nível 2) **
 
 async function loadAprovacaoPanel() {
     const listDiv = document.getElementById('aprovacao-list');
@@ -312,7 +347,7 @@ async function loadAprovacaoPanel() {
     
     const { data, error } = await supabase
         .from(PERFIS_TABLE)
-        .select('id, email, nivel_acesso, created_at') // Pegamos o created_at para ordenar
+        .select('id, email, nivel_acesso, created_at')
         .eq('status', 'PENDENTE')
         .order('created_at', { ascending: true }); 
 
@@ -336,7 +371,7 @@ async function loadAprovacaoPanel() {
             <p><strong>E-mail:</strong> ${profile.email}</p>
             <p><strong>Cargo Solicitado:</strong> ${nivelText}</p>
             <button onclick="aproveOrReject('${profile.id}', 'APROVADO', ${profile.nivel_acesso})">Aprovar e Ativar</button>
-            <button onclick="aproveOrReject('${profile.id}', 'REJEITADO', ${profile.nivel_acesso})" style="background-color: #6c757d;">Rejeitar</button>
+            <button onclick="aproveOrReject('${profile.id}', 'REJEITADO', 0)" style="background-color: #6c757d;">Rejeitar</button>
         `;
         listDiv.appendChild(card);
     });
@@ -362,7 +397,8 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
 }
 
 
-// ** 4. Função de Compressão de Imagem (Auxiliar) **
+// ** 5. Funções de Compressão e Envio de Entrega **
+
 function compressImage(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -394,7 +430,6 @@ function compressImage(file) {
     });
 }
 
-// ** 5. Função de Adicionar Foto (SEQUENCIAL) **
 async function addPhotoFromInput(event) {
     const file = event.target.files[0];
     const previewDiv = document.getElementById('photos-preview');
@@ -453,7 +488,6 @@ async function addPhotoFromInput(event) {
     }
 }
 
-// ** 6. Função de Envio de Entrega (MODIFICADA para usar o Array) **
 async function submitDelivery() {
     if (signaturePad.isEmpty()) {
         return alert("Assinatura do cliente é obrigatória.");

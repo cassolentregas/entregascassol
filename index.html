@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprovante de Entrega Digital</title>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* CSS BÁSICO (Cores da Cassol: Azul #007BFF, Fundo #F7F7F7) */
+        :root { --cor-principal: #007BFF; --cor-fundo: #F7F7F7; --cor-texto: #333333; }
+        body { font-family: Arial, sans-serif; background-color: var(--cor-fundo); color: var(--cor-texto); margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        h2 { color: var(--cor-principal); border-bottom: 2px solid var(--cor-principal); padding-bottom: 10px; margin-bottom: 20px; }
+        input[type="text"], textarea, input[type="file"], button { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: var(--cor-principal); color: white; border: none; cursor: pointer; }
+        #signature-pad { width: 100%; height: 200px; border: 1px solid #ccc; margin-bottom: 15px; background-color: #EEEEEE;}
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-area">
+            <h2>Acesso ao Sistema</h2>
+            <input type="text" id="user-input" placeholder="Usuário (entregador/gerente)" required>
+            <button onclick="handleLogin()">Entrar</button>
+        </div>
+
+        <div id="entregador-area" class="hidden">
+            <h2>Registro de Entrega</h2>
+            <input type="text" id="pedido" placeholder="Número do Pedido" required>
+            <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
+            <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
+            
+            <label>Foto da Entrega:</label>
+            <input type="file" id="foto" accept="image/*" capture="camera" required>
+
+            <label>Assinatura do Cliente:</label>
+            <canvas id="signature-pad"></canvas>
+            <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
+            <br><br>
+            
+            <button onclick="submitDelivery()">Registrar Entrega</button>
+        </div>
+
+        <div id="gerente-area" class="hidden">
+            <h2>Relatório de Entregas</h2>
+            <div id="relatorio-list">
+                </div>
+        </div>
+        
+        <button onclick="handleLogout()" style="margin-top: 20px;">Sair</button>
+    </div>
+
+    <script>
+        // Passo 2.2: Lógica JavaScript (Supabase)
+
+// ** 1. Configuração do Supabase (Substitua pelos seus dados!) **
+const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co'; // Ex: 'https://xxxxxx.supabase.co'
+const SUPABASE_KEY = 'SeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';    // Ex: 'eyJhbGciOiJIUzI1NiI...'
+const BUCKET_NAME = 'comprovantes';
+const ENTREGAS_TABLE = 'entregas';
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ** 2. Configuração da Assinatura **
+const canvas = document.getElementById('signature-pad');
+const signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(238, 238, 238)' });
+function resizeCanvas() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    signaturePad.clear();
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ** 3. Lógica de Login e Permissões (Simulada) **
+// NOTE: Como o Supabase Auth (Gratuito) é mais complexo para configurar em nível
+// Entregador/Gerente, simularemos o login com um campo simples e permissões fixas.
+let currentUser = null; 
+
+function handleLogin() {
+    const user = document.getElementById('user-input').value.toLowerCase().trim();
+    
+    if (user === 'entregador') {
+        currentUser = { name: 'Entregador', nivel: 1 };
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('entregador-area').classList.remove('hidden');
+        document.getElementById('gerente-area').classList.add('hidden');
+    } else if (user === 'gerente') {
+        currentUser = { name: 'Gerente', nivel: 2 };
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('entregador-area').classList.add('hidden');
+        document.getElementById('gerente-area').classList.remove('hidden');
+        fetchDeliveries(); // Carrega os dados para o gerente
+    } else {
+        alert('Usuário inválido. Use "entregador" ou "gerente" para testar.');
+    }
+}
+
+function handleLogout() {
+    currentUser = null;
+    document.getElementById('login-area').classList.remove('hidden');
+    document.getElementById('entregador-area').classList.add('hidden');
+    document.getElementById('gerente-area').classList.add('hidden');
+    document.getElementById('user-input').value = '';
+}
+
+// ** 4. Função de Envio de Entrega (Entregador) **
+async function submitDelivery() {
+    if (signaturePad.isEmpty()) {
+        return alert("Assinatura do cliente é obrigatória.");
+    }
+    const pedido = document.getElementById('pedido').value.trim();
+    const endereco = document.getElementById('endereco').value.trim();
+    const cliente = document.getElementById('cliente').value.trim();
+    const fotoFile = document.getElementById('foto').files[0];
+
+    if (!pedido || !endereco || !cliente || !fotoFile) {
+        return alert("Todos os campos e a foto são obrigatórios.");
+    }
+
+    // A) 1. Salvar a Foto no Supabase Storage
+    const photoPath = `public/${pedido}_${Date.now()}.jpg`;
+    const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(photoPath, fotoFile, {
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (uploadError) {
+        console.error('Erro ao fazer upload da foto:', uploadError);
+        return alert('Erro ao salvar a foto. Tente novamente.');
+    }
+    
+    // A) 2. Obter a URL Pública da Foto
+    const { data: publicUrlData } = supabase.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(photoPath);
+
+    const fotoUrl = publicUrlData.publicUrl;
+    const assinaturaBase64 = signaturePad.toDataURL('image/png');
+
+    // B) Salvar os Dados no Banco de Dados (PostgreSQL)
+    const { error: dbError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .insert([
+            {
+                numero_pedido: pedido,
+                endereco: endereco,
+                nome_cliente: cliente,
+                foto_url: fotoUrl,
+                assinatura_base64: assinaturaBase64
+            }
+        ]);
+
+    if (dbError) {
+        console.error('Erro ao salvar no banco:', dbError);
+        return alert('Erro ao registrar a entrega no banco.');
+    }
+
+    alert('Entrega registrada com sucesso!');
+    // Limpar o formulário
+    document.getElementById('pedido').value = '';
+    document.getElementById('endereco').value = '';
+    document.getElementById('cliente').value = '';
+    document.getElementById('foto').value = '';
+    signaturePad.clear();
+}
+
+// ** 5. Função de Visualização (Gerente) **
+async function fetchDeliveries() {
+    document.getElementById('relatorio-list').innerHTML = 'Carregando entregas...';
+    
+    const { data, error } = await supabase
+        .from(ENTREGAS_TABLE)
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Erro ao carregar entregas:', error);
+        document.getElementById('relatorio-list').innerHTML = 'Erro ao carregar dados.';
+        return;
+    }
+
+    let htmlContent = '';
+    if (data.length === 0) {
+        htmlContent = '<p>Nenhuma entrega registrada ainda.</p>';
+    } else {
+        data.forEach(item => {
+            htmlContent += `
+                <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 4px;">
+                    <h4>Pedido N°: ${item.numero_pedido}</h4>
+                    <p><strong>Endereço:</strong> ${item.endereco}</p>
+                    <p><strong>Recebedor:</strong> ${item.nome_cliente}</p>
+                    <p><strong>Data:</strong> ${new Date(item.created_at).toLocaleString('pt-BR')}</p>
+                    
+                    <h5 style="color: var(--cor-principal);">Foto Comprovante:</h5>
+                    <img src="${item.foto_url}" style="max-width: 100%; height: auto; border: 1px solid #333;">
+                    
+                    <h5 style="color: var(--cor-principal);">Assinatura:</h5>
+                    <img src="${item.assinatura_base64}" style="max-width: 200px; height: 100px; border: 1px solid #333;">
+                </div>
+            `;
+        });
+    }
+
+    document.getElementById('relatorio-list').innerHTML = htmlContent;
+}
+
+// Inicia o canvas ao carregar
+window.onload = resizeCanvas;
+</script>
+    </script>
+</body>
+</html>

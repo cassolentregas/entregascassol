@@ -30,6 +30,13 @@
         .pedido-card:hover { background-color: #e0e0e0; }
         .delete-btn { width: auto; padding: 5px 10px; margin-left: 10px; background-color: #dc3545; }
         .delete-btn:hover { background-color: #c82333; }
+
+        /* FIX PARA ASSINATURA NO PDF */
+        #signature-pad-display { 
+            max-width: 250px; 
+            height: 120px; 
+            border: 1px solid #333; 
+        }
     </style>
 </head>
 <body>
@@ -46,7 +53,7 @@
             <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
             <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
             
-            <label>Fotos da Entrega:</label>
+            <label>Fotos da Entrega (selecione uma ou mais):</label>
             <input type="file" id="foto" accept="image/*" capture="camera" multiple required>
 
             <label>Assinatura do Cliente:</label>
@@ -85,8 +92,7 @@
     </div>
 
     <script>
-// ** 1. Configuração do Supabase (Chaves INJETADAS) **
-// VERIFIQUE SE ESTAS CHAVES ESTÃO CORRETAS
+// ** 1. Configuração do Supabase **
 const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
 
@@ -161,7 +167,6 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Converte para Blob JPG com qualidade 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -202,7 +207,7 @@ async function submitDelivery() {
 
     if (dbError) {
         console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
-        return alert('Erro ao registrar a entrega principal no banco. Verifique RLS de INSERT na tabela "entregas".');
+        return alert('Erro ao registrar a entrega principal no banco.');
     }
     entregaId = entregaData.id;
 
@@ -212,7 +217,6 @@ async function submitDelivery() {
     // 2. Loop para processar e enviar CADA FOTO
     for (const fotoFile of fotoFiles) {
         try {
-            // Compressão
             const compressedBlob = await compressImage(fotoFile);
             
             const compressedFile = new File([compressedBlob], fotoFile.name.replace(/\.[^/.]+$/, "") + '.jpg', {
@@ -227,7 +231,7 @@ async function submitDelivery() {
                 .upload(photoPath, compressedFile, { cacheControl: '3600', upsert: false });
 
             if (uploadError) {
-                console.warn(`Falha no upload da foto: ${uploadError.message}. Verifique RLS de INSERT no Storage.`);
+                console.warn(`Falha no upload da foto: ${uploadError.message}.`);
                 continue; 
             }
 
@@ -236,7 +240,6 @@ async function submitDelivery() {
                 .from(BUCKET_NAME)
                 .getPublicUrl(photoPath);
 
-            // Adiciona a foto à lista para inserção no banco de fotos
             fotosParaInserir.push({
                 entrega_id: entregaId,
                 url: publicUrlData.publicUrl
@@ -257,7 +260,7 @@ async function submitDelivery() {
 
         if (fotosError) {
             console.error('Erro ao salvar as URLs das fotos:', fotosError);
-            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido! Verifique RLS de INSERT na tabela "fotos_comprovantes".`);
+            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
         }
     }
 
@@ -291,7 +294,7 @@ async function fetchDeliveries(searchQuery = '') {
 
     if (error) {
         console.error('Erro ao carregar pedidos:', error);
-        listDiv.innerHTML = 'Erro ao carregar pedidos. Verifique RLS de SELECT na tabela "entregas".';
+        listDiv.innerHTML = 'Erro ao carregar pedidos.';
         return;
     }
 
@@ -368,7 +371,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     }
     fotosHtml += '</div>';
 
-    // Monta o Conteúdo Final
+    // Monta o Conteúdo Final (Assinatura com ID para fixar o tamanho)
     conteudoDiv.innerHTML = `
         <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
         <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
@@ -377,7 +380,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         ${fotosHtml}
         
         <h4 style="margin-top: 15px;">Assinatura:</h4>
-        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333;">
+        <img src="${entregaData.assinatura_base64}" id="signature-pad-display">
     `;
 }
 
@@ -394,8 +397,9 @@ async function downloadComprovante() {
     document.getElementById('download-btn').style.display = 'none';
 
     try {
+        // Gera o canvas do conteúdo
         const canvas = await html2canvas(detalhesDiv, {
-            scale: 2, 
+            scale: 2, // Aumenta a resolução
             useCORS: true 
         });
 
@@ -408,6 +412,7 @@ async function downloadComprovante() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
+        // Adiciona a imagem no PDF (ajustando a altura para caber)
         pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         
         pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
@@ -442,7 +447,6 @@ async function deleteDelivery(entregaId, numeroPedido) {
     
     // 2. Excluir arquivos do Supabase Storage
     const filesToDelete = fotosData.map(foto => {
-        // Extrai o caminho do arquivo após o bucket name (comprovantes/)
         const parts = foto.url.split(`${BUCKET_NAME}/`);
         return parts.length > 1 ? parts[1] : null;
     }).filter(path => path); 
@@ -502,8 +506,7 @@ async function deleteAllDeliveries() {
         return alert('Exclusão total cancelada.');
     }
 
-    // 1. Excluir todos os registros de fotos (Filhos)
-    // O filtro '.neq' é usado para selecionar "todos" os registros.
+    // 1. Excluir todos os registros de fotos
     const { error: fotosDelError } = await supabase
         .from(FOTOS_TABLE)
         .delete()
@@ -514,7 +517,7 @@ async function deleteAllDeliveries() {
         return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
     }
     
-    // 2. Excluir todos os registros da tabela 'entregas' (Pais)
+    // 2. Excluir todos os registros da tabela 'entregas'
     const { error: entregaDelError } = await supabase
         .from(ENTREGAS_TABLE)
         .delete()
@@ -532,9 +535,6 @@ async function deleteAllDeliveries() {
     document.getElementById('detalhes-pedido').classList.add('hidden');
 }
 
-// Garante que o canvas seja redimensionado ao carregar
-window.onload = resizeCanvas;
 </script>
 </body>
 </html>
-

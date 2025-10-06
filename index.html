@@ -140,8 +140,7 @@ function handleLogout() {
     document.getElementById('gerente-area').classList.add('hidden');
     document.getElementById('user-input').value = '';
     
-    // Limpar o array temporário ao sair
-    photosToUpload = [];
+    photosToUpload = []; 
 }
 
 
@@ -183,18 +182,16 @@ async function addPhotoFromInput(event) {
     const file = event.target.files[0];
     const previewDiv = document.getElementById('photos-preview');
     const statusDiv = document.getElementById('photo-status');
-    statusDiv.textContent = ''; // Limpa o status
+    statusDiv.textContent = ''; 
     
     if (!file) return;
 
-    // Estado de processamento
     statusDiv.textContent = 'Processando e compactando foto...';
     
     try {
         // 1. Compressão
         const compressedBlob = await compressImage(file);
         
-        // Cria um objeto File a partir do Blob compactado
         const photoName = `photo_${Date.now()}.jpg`;
         const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
 
@@ -221,7 +218,7 @@ async function addPhotoFromInput(event) {
                 photosToUpload.splice(index, 1);
             }
             previewDiv.removeChild(photoContainer);
-            URL.revokeObjectURL(imgUrl); // Libera memória
+            URL.revokeObjectURL(imgUrl); 
             if (photosToUpload.length === 0) {
                  statusDiv.textContent = 'Nenhuma foto anexada.';
             } else {
@@ -239,7 +236,6 @@ async function addPhotoFromInput(event) {
         console.error('Erro ao adicionar foto:', e);
         statusDiv.textContent = 'Erro ao processar a foto.';
     } finally {
-        // Reseta o input para que o evento 'change' funcione se tirar uma nova foto
         event.target.value = '';
     }
 }
@@ -253,7 +249,6 @@ async function submitDelivery() {
     const endereco = document.getElementById('endereco').value.trim();
     const cliente = document.getElementById('cliente').value.trim();
     
-    // Agora usamos o array global de fotos
     const fotoFiles = photosToUpload; 
 
     if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
@@ -285,7 +280,6 @@ async function submitDelivery() {
     // 2. Loop para processar e enviar CADA FOTO do array temporário
     for (const compressedFile of fotoFiles) {
         try {
-            // O arquivo já está comprimido e pronto para upload
             const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
             
             const { error: uploadError } = await supabase.storage
@@ -341,7 +335,6 @@ async function submitDelivery() {
 
 
 // ** 7. Funções do Gerente (SELECT, Busca, Detalhes e DELETE) **
-// ... (As funções abaixo permanecem as mesmas, garantindo as correções de PDF)
 
 async function fetchDeliveries(searchQuery = '') {
     const listDiv = document.getElementById('historico-list');
@@ -450,8 +443,9 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     `;
 }
 
-// ** Função para Download de PDF **
+// ** NOVO: Função para Download de PDF **
 async function downloadComprovante() {
+    // Captura o div interno para excluir o título e o botão de download do PDF
     const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
 
@@ -476,7 +470,7 @@ async function downloadComprovante() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
         
         pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
 
@@ -484,7 +478,6 @@ async function downloadComprovante() {
         console.error('Erro ao gerar PDF:', error);
         alert('Houve um erro ao gerar o comprovante. Verifique o console.');
     } finally {
-        // Torna o botão visível novamente
         document.getElementById('download-btn').style.display = 'block';
     }
 }
@@ -510,7 +503,6 @@ async function deleteDelivery(entregaId, numeroPedido) {
     
     // 2. Excluir arquivos do Supabase Storage
     const filesToDelete = fotosData.map(foto => {
-        // Extrai o caminho do arquivo após o bucket name (comprovantes/)
         const parts = foto.url.split(`${BUCKET_NAME}/`);
         return parts.length > 1 ? parts[1] : null;
     }).filter(path => path); 
@@ -605,5 +597,3 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
-
-

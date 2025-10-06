@@ -21,7 +21,7 @@
         #signature-pad { width: 100%; height: 200px; border: 1px solid #ccc; margin-bottom: 15px; background-color: #EEEEEE;}
         .hidden { display: none; }
 
-        /* Estilos do Gerente (Menu Suspenso) */
+        /* Estilos do Painel/Gerente */
         .pedido-card { 
             border: 1px solid #ddd; padding: 10px; margin-bottom: 8px; 
             cursor: pointer; background-color: #f9f9f9; transition: background-color 0.2s;
@@ -63,53 +63,67 @@
 
 
         <div id="entregador-area" class="hidden">
-            <h2>Registro de Entrega</h2>
-            <input type="text" id="pedido" placeholder="Número do Pedido" required>
-            <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
-            <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
-            
-            <label>Fotos da Entrega (mínimo 1):</label>
-            <div id="photos-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+            <h2>Área do Entregador</h2>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="tab-registro-btn" style="width: 100%; background-color: #007bff;">Registro de Entregas</button>
             </div>
-            <input type="file" id="single-photo-input" accept="image/*" capture="camera" class="hidden">
-            <button type="button" onclick="document.getElementById('single-photo-input').click()">Adicionar Nova Foto</button>
-            <div id="photo-status" style="margin-bottom: 15px; color: #dc3545;"></div> 
-            <label>Assinatura do Cliente:</label>
-            <canvas id="signature-pad"></canvas>
-            <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
-            <br><br>
-            
-            <button onclick="submitDelivery()">Registrar Entrega</button>
+
+            <div id="tab-registro-content" class="tab-content">
+                <h3>Registro de Entrega</h3>
+                
+                <input type="text" id="pedido" placeholder="Número do Pedido" required>
+                <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
+                <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
+                
+                <label>Fotos da Entrega (mínimo 1):</label>
+                <div id="photos-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;"></div>
+                <input type="file" id="single-photo-input" accept="image/*" capture="camera" class="hidden">
+                <button type="button" onclick="document.getElementById('single-photo-input').click()">Adicionar Nova Foto</button>
+                <div id="photo-status" style="margin-bottom: 15px; color: #dc3545;"></div> 
+
+                <label>Assinatura do Cliente:</label>
+                <canvas id="signature-pad"></canvas>
+                <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
+                <br><br>
+                
+                <button onclick="submitDelivery()">Registrar Entrega</button>
+            </div>
         </div>
 
         <div id="gerente-area" class="hidden">
             <h2>Painel de Gerenciamento</h2>
 
-            <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                <h3>Aprovação de Usuários Pendentes</h3>
-                <div id="aprovacao-list">
-                    <p>Carregando solicitações...</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #007bff;">Histórico</button>
+                <button id="tab-aprovacao-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #0056b3;">Aprovações</button>
+            </div>
+
+            <div id="tab-historico-content" class="tab-content">
+                <h3>Histórico de Entregas</h3>
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
+                    <button onclick="deleteAllDeliveries()" style="width: auto; background-color: #dc3545;">Excluir TUDO</button>
+                </div>
+                <div id="historico-list">
+                    <p>Carregando histórico...</p>
+                </div>
+                <hr style="margin: 20px 0;">
+                <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
+                    <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
+                    <button onclick="downloadComprovante()" id="download-btn" style="width: auto; margin-bottom: 20px; background-color: #28a745;">
+                        Baixar Comprovante (PDF)
+                    </button>
+                    <div id="detalhes-conteudo"></div>
                 </div>
             </div>
-            
-            <h3>Histórico de Entregas</h3>
-            <div style="margin-bottom: 20px; display: flex; gap: 10px;">
-                <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
-                <button onclick="deleteAllDeliveries()" style="width: auto; background-color: #dc3545;">Excluir TUDO</button>
-            </div>
 
-            <div id="historico-list">
-                <p>Busque por um número de pedido ou clique em Entrar como Gerente.</p>
-            </div>
-
-            <hr style="margin: 20px 0;">
-
-            <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
-                <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
-                <button onclick="downloadComprovante()" id="download-btn" style="width: auto; margin-bottom: 20px; background-color: #28a745;">
-                    Baixar Comprovante (PDF)
-                </button>
-                <div id="detalhes-conteudo">
+            <div id="tab-aprovacao-content" class="tab-content hidden">
+                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                    <h3>Aprovação de Usuários Pendentes</h3>
+                    <div id="aprovacao-list">
+                        <p>Carregando solicitações...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -118,19 +132,22 @@
     </div>
 
     <script>
-// ** 1. Configuração do Supabase **
-const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
+// ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
+const SUPABASE_URL = 'https://hslptllaasntnrxretvd.supabase.co'; // ATUALIZE ESTA LINHA
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzbHB0bGxhYXNudG5yeHJldHZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3Nzg0NTEsImV4cCI6MjA3NTM1NDQ1MX0.kDD7ZiXBfKbR9V9L6haOS3zMNh5Z6QJi17JYn9WJe88'; // ATUALIZE ESTA LINHA
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
 const FOTOS_TABLE = 'fotos_comprovantes'; 
-const PERFIS_TABLE = 'perfis'; // NOVA TABELA
+const PERFIS_TABLE = 'perfis'; 
+const MENSAGENS_TABLE = 'mensagens'; 
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
 let photosToUpload = []; 
+let currentChatPartnerId = null; 
+let unsubscribeRealtime = null; 
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -140,10 +157,17 @@ function resizeCanvas() {
     canvas.height = canvas.offsetHeight;
     signaturePad.clear();
 }
-window.addEventListener('resize', resizeCanvas);
-window.onload = resizeCanvas;
 
-// Funções Auxiliares de UI (para trocar as telas)
+// ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
+window.onload = function() {
+    resizeCanvas();
+    checkUserSession(); 
+    document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+};
+window.addEventListener('resize', resizeCanvas);
+
+
+// Funções Auxiliares de UI
 function showRegister() {
     document.getElementById('login-area').classList.add('hidden');
     document.getElementById('cadastro-area').classList.remove('hidden');
@@ -153,8 +177,58 @@ function showLogin() {
     document.getElementById('cadastro-area').classList.add('hidden');
 }
 
-// ** 3. Lógica de Cadastro e Aprovação **
+// Navegação do Gerente
+function showGerenteTab(tabName) {
+    const tabs = ['aprovacao', 'historico'];
+    const activeColor = '#007bff';
+    const inactiveColor = '#0056b3';
 
+    tabs.forEach(tab => {
+        document.getElementById(`tab-${tab}-content`).classList.add('hidden');
+        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = inactiveColor;
+    });
+
+    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
+    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
+
+    if (tabName === 'aprovacao') loadAprovacaoPanel();
+    if (tabName === 'historico') fetchDeliveries();
+}
+
+// ** 3. Lógica de Persistência, Cadastro e Login **
+
+async function checkUserSession() {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+        const { data: profileData, error: profileError } = await supabase
+            .from(PERFIS_TABLE)
+            .select('status, nivel_acesso, email')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError || profileData.status !== 'APROVADO') {
+            await supabase.auth.signOut();
+            showLogin();
+            return;
+        }
+
+        currentUser = { id: user.id, nivel: profileData.nivel_acesso, email: profileData.email };
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('cadastro-area').classList.add('hidden');
+
+        if (currentUser.nivel === 1) {
+            document.getElementById('entregador-area').classList.remove('hidden');
+        } else if (currentUser.nivel === 2) {
+            document.getElementById('gerente-area').classList.remove('hidden');
+            showGerenteTab('historico'); // Gerente começa no Histórico
+        }
+    } else {
+        showLogin();
+    }
+}
+
+// ** CORRIGIDA: Inserção do Perfil no momento Certo com Pausa **
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -165,12 +239,13 @@ async function handleRegister() {
         return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
-    // 1. Cadastrar o usuário no Supabase Auth
-    const { error: signUpError } = await supabase.auth.signUp({
+    // 1. Cadastrar o usuário (logando-o)
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
         options: {
-            data: { nome: nome, nivel: nivel }
+            data: { nome: nome, nivel: nivel },
+            redirectTo: window.location.origin 
         }
     });
 
@@ -181,7 +256,31 @@ async function handleRegister() {
         return alert('Erro ao cadastrar. Tente novamente.');
     }
     
-    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador. Você receberá um e-mail de confirmação (necessário clicar nele) e depois o administrador fará a liberação.");
+    // 2. PAUSA CRÍTICA (RESOLUÇÃO DO ERRO 401/CRÍTICO): Aguardar para garantir que o navegador salve o token.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 3. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated' e com token salvo)
+    if (authData.user) {
+        const { error: profileInsertError } = await supabase
+            .from(PERFIS_TABLE)
+            .insert([{
+                id: authData.user.id,
+                email: authData.user.email,
+                nivel_acesso: nivel, 
+                status: 'PENDENTE'
+            }]);
+        
+        if (profileInsertError) {
+             console.error('Erro de inserção direta do perfil:', profileInsertError);
+             alert('Erro crítico ao salvar seu perfil PENDENTE. Contate o administrador.');
+             await supabase.auth.signOut();
+             return;
+        }
+    }
+
+    // 4. Desloga o usuário e informa a pendência
+    await supabase.auth.signOut();
+    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
     showLogin(); 
 }
 
@@ -189,7 +288,6 @@ async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value.trim();
 
-    // 1. Fazer login no Supabase Auth
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email,
         password: senha,
@@ -201,36 +299,30 @@ async function handleLogin() {
 
     const userId = data.user.id;
 
-    // 2. Consultar a tabela 'perfis' para verificar o STATUS e NÍVEL
     const { data: profileData, error: profileError } = await supabase
         .from(PERFIS_TABLE)
-        .select('status, nivel_acesso')
+        .select('status, nivel_acesso, email')
         .eq('id', userId)
         .single();
     
     if (profileError || !profileData) {
-        return alert('Seu perfil não foi encontrado. Contate o administrador.');
+        return alert('Seu perfil não foi encontrado. Contate o administrador. (Verifique RLS de SELECT na tabela PERFIS).');
     }
 
     if (profileData.status !== 'APROVADO') {
-        // Logica de BLOQUEIO POR STATUS
-        await supabase.auth.signOut(); // Desloga o usuário imediatamente
+        await supabase.auth.signOut(); 
         return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
     }
 
-    // Login APROVADO
-    currentUser = { id: userId, nivel: profileData.nivel_acesso };
+    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: profileData.email };
     document.getElementById('login-area').classList.add('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
-    
+
     if (currentUser.nivel === 1) {
         document.getElementById('entregador-area').classList.remove('hidden');
-        document.getElementById('gerente-area').classList.add('hidden');
     } else if (currentUser.nivel === 2) {
         document.getElementById('gerente-area').classList.remove('hidden');
-        document.getElementById('entregador-area').classList.add('hidden');
-        loadAprovacaoPanel(); // Carrega a lista de usuários pendentes
-        fetchDeliveries(); // Carrega o histórico
+        showGerenteTab('historico'); 
     }
 }
 
@@ -240,21 +332,19 @@ async function handleLogout() {
     showLogin();
     document.getElementById('entregador-area').classList.add('hidden');
     document.getElementById('gerente-area').classList.add('hidden');
-    // Limpa a lista de fotos temporárias
     photosToUpload = []; 
     document.getElementById('photos-preview').innerHTML = ''; 
 }
 
-// ** Lógica do Painel de Aprovação (Gerente/Nível 2) **
+// ** 4. Lógica do Painel de Aprovação (Gerente/Nível 2) **
 
 async function loadAprovacaoPanel() {
     const listDiv = document.getElementById('aprovacao-list');
     listDiv.innerHTML = 'Carregando solicitações...';
     
-    // Consulta por todos os perfis com status PENDENTE
     const { data, error } = await supabase
         .from(PERFIS_TABLE)
-        .select('*')
+        .select('id, email, nivel_acesso, created_at') 
         .eq('status', 'PENDENTE')
         .order('created_at', { ascending: true }); 
 
@@ -289,7 +379,6 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
         return;
     }
     
-    // Altera o status 
     const { error } = await supabase
         .from(PERFIS_TABLE)
         .update({ status: newStatus })
@@ -301,11 +390,12 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     }
     
     alert(`Usuário marcado como: ${newStatus}.`);
-    loadAprovacaoPanel(); // Recarrega o painel
+    loadAprovacaoPanel(); 
 }
 
 
-// ** 4. Função de Compressão de Imagem (Auxiliar) **
+// ** 5. Funções de Compressão e Envio de Entrega **
+
 function compressImage(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -327,7 +417,6 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -338,7 +427,6 @@ function compressImage(file) {
     });
 }
 
-// ** 5. Função de Adicionar Foto (SEQUENCIAL) **
 async function addPhotoFromInput(event) {
     const file = event.target.files[0];
     const previewDiv = document.getElementById('photos-preview');
@@ -397,7 +485,6 @@ async function addPhotoFromInput(event) {
     }
 }
 
-// ** 6. Função de Envio de Entrega (MODIFICADA para usar o Array) **
 async function submitDelivery() {
     if (signaturePad.isEmpty()) {
         return alert("Assinatura do cliente é obrigatória.");
@@ -618,7 +705,6 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     `;
 }
 
-// ** NOVO: Função para Download de PDF **
 async function downloadComprovante() {
     const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
@@ -657,7 +743,6 @@ async function downloadComprovante() {
 }
 
 
-// ** NOVO: Função para Excluir um Pedido **
 async function deleteDelivery(entregaId, numeroPedido) {
     if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
         return;
@@ -718,7 +803,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
         return;
     }
 
-    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+    alert(`Pedido N° ${pedidoNumero} excluído com sucesso!`);
     
     // Atualiza a lista
     fetchDeliveries(document.getElementById('search-input').value.trim());
@@ -764,6 +849,190 @@ async function deleteAllDeliveries() {
     fetchDeliveries();
     document.getElementById('detalhes-pedido').classList.add('hidden');
 }
+
+// ** Lógica de Adicionar Foto e Envio **
+
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const MAX_WIDTH = 800; 
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
+            };
+            img.onerror = reject; 
+            img.src = event.target.result;
+        };
+        reader.onerror = reject; 
+        reader.readAsDataURL(file);
+    });
+}
+
+async function addPhotoFromInput(event) {
+    const file = event.target.files[0];
+    const previewDiv = document.getElementById('photos-preview');
+    const statusDiv = document.getElementById('photo-status');
+    statusDiv.textContent = ''; 
+    
+    if (!file) return;
+
+    statusDiv.textContent = 'Processando e compactando foto...';
+    
+    try {
+        const compressedBlob = await compressImage(file);
+        
+        const photoName = `photo_${Date.now()}.jpg`;
+        const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
+
+        photosToUpload.push(compressedFile);
+
+        const imgUrl = URL.createObjectURL(compressedBlob);
+        
+        const photoContainer = document.createElement('div');
+        photoContainer.style = 'position: relative;';
+        
+        const imgElement = document.createElement('img');
+        imgElement.src = imgUrl;
+        imgElement.style = 'max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'X';
+        deleteBtn.style = 'position: absolute; top: -5px; right: -5px; background-color: red; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;';
+        deleteBtn.onclick = function() {
+            const index = photosToUpload.indexOf(compressedFile);
+            if (index > -1) {
+                photosToUpload.splice(index, 1);
+            }
+            previewDiv.removeChild(photoContainer);
+            URL.revokeObjectURL(imgUrl); 
+            if (photosToUpload.length === 0) {
+                 statusDiv.textContent = 'Nenhuma foto anexada.';
+            } else {
+                statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+            }
+        };
+
+        photoContainer.appendChild(imgElement);
+        photoContainer.appendChild(deleteBtn);
+        previewDiv.appendChild(photoContainer);
+
+        statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+        
+    } catch (e) {
+        console.error('Erro ao adicionar foto:', e);
+        statusDiv.textContent = 'Erro ao processar a foto.';
+    } finally {
+        event.target.value = '';
+    }
+}
+
+async function submitDelivery() {
+    if (signaturePad.isEmpty()) {
+        return alert("Assinatura do cliente é obrigatória.");
+    }
+    const pedido = document.getElementById('pedido').value.trim();
+    const endereco = document.getElementById('endereco').value.trim();
+    const cliente = document.getElementById('cliente').value.trim();
+    
+    const fotoFiles = photosToUpload; 
+
+    if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
+        return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
+    }
+
+    // 1. Inserir a Entrega PRINCIPAL (para obter o ID)
+    let entregaId;
+    const { data: entregaData, error: dbError } = await supabase
+        .from(ENTREGAS_TABLE) 
+        .insert([{
+            numero_pedido: pedido,
+            endereco: endereco,
+            nome_cliente: cliente,
+            assinatura_base64: signaturePad.toDataURL('image/png')
+        }])
+        .select('id') 
+        .single();
+
+    if (dbError) {
+        console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
+        return alert('Erro ao registrar a entrega principal no banco.');
+    }
+    entregaId = entregaData.id;
+
+    const fotosParaInserir = []; 
+    let uploadSuccessCount = 0;
+    
+    // 2. Loop para processar e enviar CADA FOTO do array temporário
+    for (const compressedFile of fotoFiles) {
+        try {
+            const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
+            
+            const { error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(photoPath, compressedFile, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) {
+                console.warn(`Falha no upload da foto: ${uploadError.message}.`);
+                continue; 
+            }
+
+            // Obter URL
+            const { data: publicUrlData } = supabase.storage
+                .from(BUCKET_NAME)
+                .getPublicUrl(photoPath);
+
+            fotosParaInserir.push({
+                entrega_id: entregaId,
+                url: publicUrlData.publicUrl
+            });
+            uploadSuccessCount++;
+
+        } catch (e) {
+            console.error('Erro durante processamento da foto:', e);
+            continue; 
+        }
+    }
+
+    // 3. Salvar as URLs das Fotos na tabela 'fotos_comprovantes'
+    if (fotosParaInserir.length > 0) {
+        const { error: fotosError } = await supabase
+            .from(FOTOS_TABLE)
+            .insert(fotosParaInserir);
+
+        if (fotosError) {
+            console.error('Erro ao salvar as URLs das fotos:', fotosError);
+            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
+        }
+    }
+
+    alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
+    
+    // 4. Limpar o formulário e a lista temporária
+    document.getElementById('pedido').value = '';
+    document.getElementById('endereco').value = '';
+    document.getElementById('cliente').value = '';
+    signaturePad.clear();
+    
+    photosToUpload = []; 
+    document.getElementById('photos-preview').innerHTML = ''; 
+    document.getElementById('photo-status').textContent = ''; 
+}
+
 
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);

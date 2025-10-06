@@ -62,7 +62,7 @@ const SUPABASE_KEY = 'SeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas';
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ** 2. Configuração da Assinatura **
 const canvas = document.getElementById('signature-pad');
@@ -215,4 +215,5 @@ window.onload = resizeCanvas;
 </script>
     </script>
 </body>
+
 </html>

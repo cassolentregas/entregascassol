@@ -46,9 +46,12 @@
             <textarea id="endereco" placeholder="Endereço da Entrega" rows="2" required></textarea>
             <input type="text" id="cliente" placeholder="Nome do Recebedor" required>
             
-            <label>Fotos da Entrega (selecione uma ou mais):</label>
-            <input type="file" id="foto" accept="image/*" capture="camera" multiple required>
-
+            <label>Fotos da Entrega (mínimo 1):</label>
+            <div id="photos-preview" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                </div>
+            <input type="file" id="single-photo-input" accept="image/*" capture="camera" class="hidden">
+            <button type="button" onclick="document.getElementById('single-photo-input').click()">Adicionar Nova Foto</button>
+            <div id="photo-status" style="margin-bottom: 15px; color: #dc3545;"></div> 
             <label>Assinatura do Cliente:</label>
             <canvas id="signature-pad"></canvas>
             <button type="button" onclick="signaturePad.clear()">Limpar Assinatura</button>
@@ -96,6 +99,7 @@ const FOTOS_TABLE = 'fotos_comprovantes';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
+let photosToUpload = []; // ARRAY GLOBAL: Armazena as fotos antes do envio final
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -135,6 +139,9 @@ function handleLogout() {
     document.getElementById('entregador-area').classList.add('hidden');
     document.getElementById('gerente-area').classList.add('hidden');
     document.getElementById('user-input').value = '';
+    
+    // Limpar o array temporário ao sair
+    photosToUpload = [];
 }
 
 
@@ -160,6 +167,7 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
+                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -170,8 +178,73 @@ function compressImage(file) {
     });
 }
 
+// ** 5. Função de Adicionar Foto (SEQUENCIAL) **
+async function addPhotoFromInput(event) {
+    const file = event.target.files[0];
+    const previewDiv = document.getElementById('photos-preview');
+    const statusDiv = document.getElementById('photo-status');
+    statusDiv.textContent = ''; // Limpa o status
+    
+    if (!file) return;
 
-// ** 5. Função de Envio de Entrega (Múltiplas Fotos) **
+    // Estado de processamento
+    statusDiv.textContent = 'Processando e compactando foto...';
+    
+    try {
+        // 1. Compressão
+        const compressedBlob = await compressImage(file);
+        
+        // Cria um objeto File a partir do Blob compactado
+        const photoName = `photo_${Date.now()}.jpg`;
+        const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
+
+        // 2. Armazena no array global
+        photosToUpload.push(compressedFile);
+
+        // 3. Cria o preview (miniatura e botão de remover)
+        const imgUrl = URL.createObjectURL(compressedBlob);
+        
+        const photoContainer = document.createElement('div');
+        photoContainer.style = 'position: relative;';
+        
+        const imgElement = document.createElement('img');
+        imgElement.src = imgUrl;
+        imgElement.style = 'max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'X';
+        deleteBtn.style = 'position: absolute; top: -5px; right: -5px; background-color: red; border: none; color: white; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;';
+        deleteBtn.onclick = function() {
+            // Remove do array e do DOM
+            const index = photosToUpload.indexOf(compressedFile);
+            if (index > -1) {
+                photosToUpload.splice(index, 1);
+            }
+            previewDiv.removeChild(photoContainer);
+            URL.revokeObjectURL(imgUrl); // Libera memória
+            if (photosToUpload.length === 0) {
+                 statusDiv.textContent = 'Nenhuma foto anexada.';
+            } else {
+                statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+            }
+        };
+
+        photoContainer.appendChild(imgElement);
+        photoContainer.appendChild(deleteBtn);
+        previewDiv.appendChild(photoContainer);
+
+        statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+        
+    } catch (e) {
+        console.error('Erro ao adicionar foto:', e);
+        statusDiv.textContent = 'Erro ao processar a foto.';
+    } finally {
+        // Reseta o input para que o evento 'change' funcione se tirar uma nova foto
+        event.target.value = '';
+    }
+}
+
+// ** 6. Função de Envio de Entrega (MODIFICADA para usar o Array) **
 async function submitDelivery() {
     if (signaturePad.isEmpty()) {
         return alert("Assinatura do cliente é obrigatória.");
@@ -179,7 +252,9 @@ async function submitDelivery() {
     const pedido = document.getElementById('pedido').value.trim();
     const endereco = document.getElementById('endereco').value.trim();
     const cliente = document.getElementById('cliente').value.trim();
-    const fotoFiles = document.getElementById('foto').files; 
+    
+    // Agora usamos o array global de fotos
+    const fotoFiles = photosToUpload; 
 
     if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
         return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
@@ -207,16 +282,10 @@ async function submitDelivery() {
     const fotosParaInserir = []; 
     let uploadSuccessCount = 0;
     
-    // 2. Loop para processar e enviar CADA FOTO
-    for (const fotoFile of fotoFiles) {
+    // 2. Loop para processar e enviar CADA FOTO do array temporário
+    for (const compressedFile of fotoFiles) {
         try {
-            const compressedBlob = await compressImage(fotoFile);
-            
-            const compressedFile = new File([compressedBlob], fotoFile.name.replace(/\.[^/.]+$/, "") + '.jpg', {
-                type: 'image/jpeg'
-            });
-
-            // Upload
+            // O arquivo já está comprimido e pronto para upload
             const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
             
             const { error: uploadError } = await supabase.storage
@@ -259,16 +328,20 @@ async function submitDelivery() {
 
     alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
     
-    // Limpar o formulário
+    // 4. Limpar o formulário e a lista temporária
     document.getElementById('pedido').value = '';
     document.getElementById('endereco').value = '';
     document.getElementById('cliente').value = '';
-    document.getElementById('foto').value = '';
     signaturePad.clear();
+    
+    photosToUpload = []; // Limpa o array
+    document.getElementById('photos-preview').innerHTML = ''; // Limpa os previews
+    document.getElementById('photo-status').textContent = ''; // Limpa o status
 }
 
 
-// ** 6. Funções do Gerente (SELECT, Busca, Detalhes e DELETE) **
+// ** 7. Funções do Gerente (SELECT, Busca, Detalhes e DELETE) **
+// ... (As funções abaixo permanecem as mesmas, garantindo as correções de PDF)
 
 async function fetchDeliveries(searchQuery = '') {
     const listDiv = document.getElementById('historico-list');
@@ -377,9 +450,8 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     `;
 }
 
-// ** NOVO: Função para Download de PDF **
+// ** Função para Download de PDF **
 async function downloadComprovante() {
-    // Captura o div interno para excluir o título e o botão de download do PDF
     const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
 
@@ -387,7 +459,6 @@ async function downloadComprovante() {
         return alert('Selecione um pedido primeiro.');
     }
 
-    // Oculta o botão de download
     document.getElementById('download-btn').style.display = 'none';
 
     try {
@@ -405,128 +476,4 @@ async function downloadComprovante() {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        
-        pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
-
-    } catch (error) {
-        console.error('Erro ao gerar PDF:', error);
-        alert('Houve um erro ao gerar o comprovante. Verifique o console.');
-    } finally {
-        // Torna o botão visível novamente
-        document.getElementById('download-btn').style.display = 'block';
-    }
-}
-
-
-// ** NOVO: Função para Excluir um Pedido **
-async function deleteDelivery(entregaId, numeroPedido) {
-    if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
-        return;
-    }
-
-    // 1. Buscar fotos para obter os caminhos do Storage
-    const { data: fotosData, error: fotosFetchError } = await supabase
-        .from(FOTOS_TABLE)
-        .select('url')
-        .eq('entrega_id', entregaId);
-
-    if (fotosFetchError) {
-        console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
-        alert('Erro ao buscar fotos. Exclusão abortada.');
-        return;
-    }
-    
-    // 2. Excluir arquivos do Supabase Storage
-    const filesToDelete = fotosData.map(foto => {
-        const parts = foto.url.split(`${BUCKET_NAME}/`);
-        return parts.length > 1 ? parts[1] : null;
-    }).filter(path => path); 
-
-    if (filesToDelete.length > 0) {
-        const { error: storageDelError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .remove(filesToDelete);
-        
-        if (storageDelError) {
-            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
-            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
-        }
-    }
-    
-    // 3. Excluir registros do banco (ordem: filhos primeiro, pai depois)
-    
-    // Excluir registros da tabela 'fotos_comprovantes' (FILHO)
-    const { error: fotosDelError } = await supabase
-        .from(FOTOS_TABLE)
-        .delete()
-        .eq('entrega_id', entregaId);
-
-    if (fotosDelError) {
-        console.error('Erro ao excluir registros de fotos:', fotosDelError);
-        alert(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
-        return;
-    }
-
-    // Excluir registro principal da tabela 'entregas' (PAI)
-    const { error: entregaDelError } = await supabase
-        .from(ENTREGAS_TABLE)
-        .delete()
-        .eq('id', entregaId);
-
-    if (entregaDelError) {
-        console.error('Erro ao excluir registro principal:', entregaDelError);
-        alert(`Erro ao excluir pedido principal ${numeroPedido}.`);
-        return;
-    }
-
-    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
-    
-    // Atualiza a lista
-    fetchDeliveries(document.getElementById('search-input').value.trim());
-    document.getElementById('detalhes-pedido').classList.add('hidden');
-}
-
-// ** NOVO: Função para Excluir TODOS os Pedidos **
-async function deleteAllDeliveries() {
-    if (!confirm("CONFIRMAÇÃO EXTREMA: Você está prestes a EXCLUIR TODOS OS PEDIDOS E FOTOS. Esta ação é IRREVERSÍVEL.")) {
-        return;
-    }
-    const confirmationText = prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO' na caixa abaixo:");
-    
-    if (confirmationText !== 'DELETAR TUDO') {
-        return alert('Exclusão total cancelada.');
-    }
-
-    // 1. Excluir todos os registros de fotos
-    const { error: fotosDelError } = await supabase
-        .from(FOTOS_TABLE)
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); 
-
-    if (fotosDelError) {
-        console.error('Erro ao excluir TODAS as fotos:', fotosDelError);
-        return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
-    }
-    
-    // 2. Excluir todos os registros da tabela 'entregas'
-    const { error: entregaDelError } = await supabase
-        .from(ENTREGAS_TABLE)
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); 
-
-    if (entregaDelError) {
-        console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
-        return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
-    }
-
-    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
-    
-    // Atualiza a lista
-    fetchDeliveries();
-    document.getElementById('detalhes-pedido').classList.add('hidden');
-}
-
-</script>
-</body>
-</html>
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth

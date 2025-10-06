@@ -30,13 +30,7 @@
         .pedido-card:hover { background-color: #e0e0e0; }
         .delete-btn { width: auto; padding: 5px 10px; margin-left: 10px; background-color: #dc3545; }
         .delete-btn:hover { background-color: #c82333; }
-
-        /* FIX PARA ASSINATURA NO PDF */
-        #signature-pad-display { 
-            max-width: 250px; 
-            height: 120px; 
-            border: 1px solid #333; 
-        }
+        /* OBS: O estilo de assinatura foi movido para inline no JS */
     </style>
 </head>
 <body>
@@ -371,7 +365,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
     }
     fotosHtml += '</div>';
 
-    // Monta o Conteúdo Final (Assinatura com ID para fixar o tamanho)
+    // Monta o Conteúdo Final (Assinatura com estilo inline para FIXAR o PDF)
     conteudoDiv.innerHTML = `
         <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
         <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
@@ -380,7 +374,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         ${fotosHtml}
         
         <h4 style="margin-top: 15px;">Assinatura:</h4>
-        <img src="${entregaData.assinatura_base64}" id="signature-pad-display">
+        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333;">
     `;
 }
 

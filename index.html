@@ -99,7 +99,7 @@ const FOTOS_TABLE = 'fotos_comprovantes';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
-let photosToUpload = []; // ARRAY GLOBAL: Armazena as fotos antes do envio final
+let photosToUpload = []; 
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -166,7 +166,6 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -328,9 +327,9 @@ async function submitDelivery() {
     document.getElementById('cliente').value = '';
     signaturePad.clear();
     
-    photosToUpload = []; // Limpa o array
-    document.getElementById('photos-preview').innerHTML = ''; // Limpa os previews
-    document.getElementById('photo-status').textContent = ''; // Limpa o status
+    photosToUpload = []; 
+    document.getElementById('photos-preview').innerHTML = ''; 
+    document.getElementById('photo-status').textContent = ''; 
 }
 
 
@@ -420,7 +419,7 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         return;
     }
     
-    let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+    let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">';
     if (fotosData.length === 0) {
         fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
     } else {
@@ -438,14 +437,31 @@ async function showDeliveryDetails(entregaId, numeroPedido) {
         
         ${fotosHtml}
         
-        <h4 style="margin-top: 15px;">Assinatura:</h4>
-        <img src="${entregaData.assinatura_base64}" style="max-width: 250px; height: 100px; border: 1px solid #333; padding: 5px; margin-bottom: 10px;">
+        <h4 style="margin-top: 15px; margin-bottom: 5px;">Assinatura:</h4>
+        <div style="
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            background-color: white; 
+            margin-bottom: 20px;
+        ">
+            <img 
+                src="${entregaData.assinatura_base64}" 
+                style="
+                    max-width: 250px; 
+                    height: 100px; 
+                    padding: 0; 
+                "
+            >
+        </div>
     `;
 }
 
 // ** NOVO: Função para Download de PDF **
 async function downloadComprovante() {
-    // Captura o div interno para excluir o título e o botão de download do PDF
     const elementoParaCapturar = document.getElementById('detalhes-conteudo');
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
 

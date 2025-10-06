@@ -133,7 +133,6 @@
 
     <script>
 // ** 1. Configuração do Supabase **
-// CHAVE SECRETA REMOVIDA
 const SUPABASE_URL = 'https://myfqnrxjhmuilotxbtnq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15ZnFucnhqaG11aWxvdHhidG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3MTAxOTAsImV4cCI6MjA3NTI4NjE5MH0.ZB9PZq5nxQuFON0e46qXHpNuU4DTofneXjWvf486qww';
 
@@ -240,11 +239,13 @@ async function handleRegister() {
     }
     
     // 1. Cadastrar o usuário no Supabase Auth (logando-o)
+    // Usamos a opção redirectTo para forçar o Supabase a salvar o token de sessão (CRÍTICO!)
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
         options: {
-            data: { nome: nome, nivel: nivel }
+            data: { nome: nome, nivel: nivel },
+            redirectTo: window.location.origin 
         }
     });
 
@@ -255,7 +256,10 @@ async function handleRegister() {
         return alert('Erro ao cadastrar. Tente novamente.');
     }
     
-    // 2. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated')
+    // 2. PAUSA CRÍTICA: Aguardar 1 segundo para garantir que o navegador salve o token.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 3. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated' e com token salvo)
     if (authData.user) {
         const { error: profileInsertError } = await supabase
             .from(PERFIS_TABLE)
@@ -274,7 +278,7 @@ async function handleRegister() {
         }
     }
 
-    // 3. Desloga o usuário e informa a pendência
+    // 4. Desloga o usuário e informa a pendência
     await supabase.auth.signOut();
     alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
     showLogin(); 

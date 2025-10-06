@@ -21,7 +21,7 @@
         #signature-pad { width: 100%; height: 200px; border: 1px solid #ccc; margin-bottom: 15px; background-color: #EEEEEE;}
         .hidden { display: none; }
 
-        /* Estilos do Gerente (Menu Suspenso) */
+        /* Estilos do Painel/Gerente */
         .pedido-card { 
             border: 1px solid #ddd; padding: 10px; margin-bottom: 8px; 
             cursor: pointer; background-color: #f9f9f9; transition: background-color 0.2s;
@@ -32,6 +32,21 @@
         .delete-btn:hover { background-color: #c82333; }
         .aprovacao-card { border: 1px solid #ffc107; padding: 10px; margin-bottom: 10px; background-color: #fff3cd; }
         .aprovacao-card button { width: auto; margin: 5px 5px 0 0; }
+        
+        /* Estilos do Chat */
+        #chat-messages { height: 200px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column;}
+        .message-right { text-align: right; }
+        .message-left { text-align: left; }
+        .chat-bubble {
+            padding: 5px 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            display: inline-block;
+            margin: 3px 0;
+            word-wrap: break-word; /* Garante que mensagens longas quebrem a linha */
+        }
+        .me { background-color: #dcf8c6; }
+        .partner { background-color: #e5e5ea; }
     </style>
 </head>
 <body>
@@ -85,31 +100,55 @@
         <div id="gerente-area" class="hidden">
             <h2>Painel de Gerenciamento</h2>
 
-            <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                <h3>Aprovação de Usuários Pendentes</h3>
-                <div id="aprovacao-list">
-                    <p>Carregando solicitações...</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="tab-aprovacao-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #007bff;">Aprovações</button>
+                <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #0056b3;">Histórico</button>
+                <button id="tab-chat-btn" onclick="showGerenteTab('chat')" style="width: auto; background-color: #0056b3;">Chat Privado</button>
+            </div>
+
+            <div id="tab-aprovacao-content" class="tab-content">
+                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                    <h3>Aprovação de Usuários Pendentes</h3>
+                    <div id="aprovacao-list">
+                        <p>Carregando solicitações...</p>
+                    </div>
                 </div>
             </div>
             
-            <h3>Histórico de Entregas</h3>
-            <div style="margin-bottom: 20px; display: flex; gap: 10px;">
-                <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
-                <button onclick="deleteAllDeliveries()" style="width: auto; background-color: #dc3545;">Excluir TUDO</button>
+            <div id="tab-historico-content" class="tab-content hidden">
+                <h3>Histórico de Entregas</h3>
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <input type="text" id="search-input" placeholder="Buscar por Número do Pedido..." onkeyup="searchDeliveries()">
+                    <button onclick="deleteAllDeliveries()" style="width: auto; background-color: #dc3545;">Excluir TUDO</button>
+                </div>
+                <div id="historico-list">
+                    <p>Busque por um número de pedido ou clique em Histórico.</p>
+                </div>
+                <hr style="margin: 20px 0;">
+                <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
+                    <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
+                    <button onclick="downloadComprovante()" id="download-btn" style="width: auto; margin-bottom: 20px; background-color: #28a745;">
+                        Baixar Comprovante (PDF)
+                    </button>
+                    <div id="detalhes-conteudo"></div>
+                </div>
             </div>
 
-            <div id="historico-list">
-                <p>Busque por um número de pedido ou clique em Entrar como Gerente.</p>
-            </div>
+            <div id="tab-chat-content" class="tab-content hidden">
+                <h3>Chat Privado</h3>
+                
+                <input type="text" id="chat-search-input" placeholder="Buscar Entregador ou Gerente por E-mail..." onkeyup="searchUsersForChat()">
+                
+                <div id="user-list-chat" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px;">
+                    <p>Digite um e-mail para buscar e iniciar uma conversa.</p>
+                </div>
 
-            <hr style="margin: 20px 0;">
-
-            <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
-                <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
-                <button onclick="downloadComprovante()" id="download-btn" style="width: auto; margin-bottom: 20px; background-color: #28a745;">
-                    Baixar Comprovante (PDF)
-                </button>
-                <div id="detalhes-conteudo">
+                <div id="chat-window" class="hidden" style="border: 1px solid #007bff; padding: 10px; border-radius: 4px;">
+                    <h4 id="chat-partner-email">Conversando com:</h4>
+                    <div id="chat-messages">
+                        </div>
+                    <textarea id="chat-message-input" placeholder="Digite sua mensagem..." rows="2" style="margin-bottom: 5px;"></textarea>
+                    <button onclick="sendMessage()" style="width: 100%;">Enviar</button>
                 </div>
             </div>
         </div>
@@ -125,12 +164,15 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
 const FOTOS_TABLE = 'fotos_comprovantes'; 
-const PERFIS_TABLE = 'perfis'; // NOVA TABELA
+const PERFIS_TABLE = 'perfis';
+const MENSAGENS_TABLE = 'mensagens'; // Nova Tabela de Chat
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
 let photosToUpload = []; 
+let currentChatPartnerId = null; 
+let unsubscribeRealtime = null; // Gerencia a conexão em tempo real
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -143,7 +185,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 window.onload = resizeCanvas;
 
-// Funções Auxiliares de UI (para trocar as telas)
+// Funções Auxiliares de UI
 function showRegister() {
     document.getElementById('login-area').classList.add('hidden');
     document.getElementById('cadastro-area').classList.remove('hidden');
@@ -152,6 +194,25 @@ function showLogin() {
     document.getElementById('login-area').classList.remove('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
 }
+function showGerenteTab(tabName) {
+    const tabs = ['aprovacao', 'historico', 'chat'];
+    tabs.forEach(tab => {
+        document.getElementById(`tab-${tab}-content`).classList.add('hidden');
+        document.getElementById(`tab-${tab}-btn`).style.backgroundColor = '#0056b3';
+    });
+
+    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
+    document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = '#007bff';
+
+    if (tabName === 'aprovacao') loadAprovacaoPanel();
+    if (tabName === 'historico') fetchDeliveries();
+    if (tabName === 'chat') {
+        document.getElementById('user-list-chat').innerHTML = '<p>Digite um e-mail para buscar e iniciar uma conversa.</p>';
+        // Garante que a janela de chat esteja escondida ao trocar para a aba Chat
+        document.getElementById('chat-window').classList.add('hidden'); 
+    }
+}
+
 
 // ** 3. Lógica de Cadastro e Aprovação **
 
@@ -165,7 +226,6 @@ async function handleRegister() {
         return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
-    // 1. Cadastrar o usuário no Supabase Auth
     const { error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
@@ -181,7 +241,7 @@ async function handleRegister() {
         return alert('Erro ao cadastrar. Tente novamente.');
     }
     
-    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador. Você receberá um e-mail de confirmação (necessário clicar nele) e depois o administrador fará a liberação.");
+    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
     showLogin(); 
 }
 
@@ -189,7 +249,6 @@ async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value.trim();
 
-    // 1. Fazer login no Supabase Auth
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email,
         password: senha,
@@ -213,13 +272,12 @@ async function handleLogin() {
     }
 
     if (profileData.status !== 'APROVADO') {
-        // Logica de BLOQUEIO POR STATUS
-        await supabase.auth.signOut(); // Desloga o usuário imediatamente
+        await supabase.auth.signOut(); 
         return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
     }
 
     // Login APROVADO
-    currentUser = { id: userId, nivel: profileData.nivel_acesso };
+    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: email };
     document.getElementById('login-area').classList.add('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
     
@@ -229,18 +287,19 @@ async function handleLogin() {
     } else if (currentUser.nivel === 2) {
         document.getElementById('gerente-area').classList.remove('hidden');
         document.getElementById('entregador-area').classList.add('hidden');
-        loadAprovacaoPanel(); // Carrega a lista de usuários pendentes
-        fetchDeliveries(); // Carrega o histórico
+        showGerenteTab('aprovacao'); // Abre a aba de aprovação por padrão
     }
 }
 
 async function handleLogout() {
+    if (unsubscribeRealtime) {
+        unsubscribeRealtime.unsubscribe(); // Desliga o chat realtime
+    }
     await supabase.auth.signOut();
     currentUser = null;
     showLogin();
     document.getElementById('entregador-area').classList.add('hidden');
     document.getElementById('gerente-area').classList.add('hidden');
-    // Limpa a lista de fotos temporárias
     photosToUpload = []; 
     document.getElementById('photos-preview').innerHTML = ''; 
 }
@@ -251,10 +310,9 @@ async function loadAprovacaoPanel() {
     const listDiv = document.getElementById('aprovacao-list');
     listDiv.innerHTML = 'Carregando solicitações...';
     
-    // Consulta por todos os perfis com status PENDENTE
     const { data, error } = await supabase
         .from(PERFIS_TABLE)
-        .select('*')
+        .select('id, email, nivel_acesso, created_at') // Pegamos o created_at para ordenar
         .eq('status', 'PENDENTE')
         .order('created_at', { ascending: true }); 
 
@@ -278,7 +336,7 @@ async function loadAprovacaoPanel() {
             <p><strong>E-mail:</strong> ${profile.email}</p>
             <p><strong>Cargo Solicitado:</strong> ${nivelText}</p>
             <button onclick="aproveOrReject('${profile.id}', 'APROVADO', ${profile.nivel_acesso})">Aprovar e Ativar</button>
-            <button onclick="aproveOrReject('${profile.id}', 'REJEITADO', 0)" style="background-color: #6c757d;">Rejeitar</button>
+            <button onclick="aproveOrReject('${profile.id}', 'REJEITADO', ${profile.nivel_acesso})" style="background-color: #6c757d;">Rejeitar</button>
         `;
         listDiv.appendChild(card);
     });
@@ -289,7 +347,6 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
         return;
     }
     
-    // Altera o status 
     const { error } = await supabase
         .from(PERFIS_TABLE)
         .update({ status: newStatus })
@@ -301,7 +358,7 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     }
     
     alert(`Usuário marcado como: ${newStatus}.`);
-    loadAprovacaoPanel(); // Recarrega o painel
+    loadAprovacaoPanel(); 
 }
 
 
@@ -327,7 +384,6 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -763,6 +819,136 @@ async function deleteAllDeliveries() {
     // Atualiza a lista
     fetchDeliveries();
     document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** Lógica do Chat Privado (Realtime) **
+
+async function searchUsersForChat() {
+    const searchQuery = document.getElementById('chat-search-input').value.trim();
+    const userListDiv = document.getElementById('user-list-chat');
+    
+    if (searchQuery.length < 3) {
+        userListDiv.innerHTML = '<p>Digite pelo menos 3 caracteres do e-mail.</p>';
+        return;
+    }
+    
+    userListDiv.innerHTML = 'Buscando...';
+
+    const { data, error } = await supabase
+        .from(PERFIS_TABLE)
+        .select('id, email, nivel_acesso')
+        .eq('status', 'APROVADO')
+        .neq('id', currentUser.id) // Exclui meu próprio perfil
+        .ilike('email', `%${searchQuery}%`); 
+
+    if (error || data.length === 0) {
+        userListDiv.innerHTML = '<p>Nenhum usuário aprovado encontrado com esse e-mail.</p>';
+        return;
+    }
+
+    userListDiv.innerHTML = '';
+    data.forEach(user => {
+        const nivelText = user.nivel_acesso === 2 ? 'Gerente' : 'Entregador';
+        const item = document.createElement('div');
+        item.className = 'pedido-card';
+        item.style.cursor = 'pointer';
+        item.onclick = () => startChat(user.id, user.email);
+        item.innerHTML = `
+            <strong>${user.email}</strong> 
+            <span style="color: #007bff;">(${nivelText})</span>
+            <button style="width: auto; padding: 5px; margin: 0; background-color: #28a745;">Iniciar Chat</button>
+        `;
+        userListDiv.appendChild(item);
+    });
+}
+
+async function startChat(partnerId, partnerEmail) {
+    currentChatPartnerId = partnerId;
+    document.getElementById('chat-partner-email').textContent = `Conversando com: ${partnerEmail}`;
+    document.getElementById('chat-window').classList.remove('hidden');
+    
+    if (unsubscribeRealtime) {
+        unsubscribeRealtime.unsubscribe();
+    }
+    
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    chatMessagesDiv.innerHTML = 'Carregando mensagens...';
+
+    await fetchChatHistory(partnerId);
+
+    unsubscribeRealtime = supabase
+        .channel(`chat_${currentUser.id}_${partnerId}`) 
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: MENSAGENS_TABLE,
+            filter: `or(from_user_id.eq.${partnerId},to_user_id.eq.${partnerId})` 
+        }, payload => {
+            if (payload.new.from_user_id === partnerId || payload.new.to_user_id === currentUser.id) {
+                displayMessage(payload.new);
+            }
+        })
+        .subscribe();
+        
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+}
+
+async function fetchChatHistory(partnerId) {
+    const { data: messages, error } = await supabase
+        .from(MENSAGENS_TABLE)
+        .select('*')
+        .or(`and(from_user_id.eq.${currentUser.id},to_user_id.eq.${partnerId}),and(from_user_id.eq.${partnerId},to_user_id.eq.${currentUser.id})`)
+        .order('created_at', { ascending: true });
+
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    chatMessagesDiv.innerHTML = ''; 
+
+    if (error) {
+        chatMessagesDiv.innerHTML = 'Erro ao carregar histórico.';
+        return;
+    }
+
+    messages.forEach(displayMessage);
+}
+
+function displayMessage(message) {
+    const chatMessagesDiv = document.getElementById('chat-messages');
+    const isMe = message.from_user_id === currentUser.id;
+    
+    const container = document.createElement('div');
+    container.className = isMe ? 'message-right' : 'message-left';
+    container.style.width = '100%';
+    
+    const msgElement = document.createElement('div');
+    msgElement.className = isMe ? 'chat-bubble me' : 'chat-bubble partner';
+    msgElement.textContent = message.content;
+    
+    container.appendChild(msgElement);
+    chatMessagesDiv.appendChild(container);
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-message-input');
+    const content = input.value.trim();
+    
+    if (!content || !currentChatPartnerId) return;
+
+    const { error } = await supabase
+        .from(MENSAGENS_TABLE)
+        .insert([{
+            from_user_id: currentUser.id,
+            to_user_id: currentChatPartnerId,
+            content: content
+        }]);
+
+    if (error) {
+        alert('Falha ao enviar mensagem.');
+        console.error('Erro ao enviar:', error);
+        return;
+    }
+    
+    input.value = '';
 }
 
 // ** EVENT LISTENER para a nova função de foto sequencial **

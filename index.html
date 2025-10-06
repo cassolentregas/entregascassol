@@ -122,10 +122,56 @@ async function submitDelivery() {
     }
 
     // A) 1. Salvar a Foto no Supabase Storage
+        // --- [INÍCIO DO NOVO BLOCO OTIMIZADO] ---
+    
+    // ** 1. NOVA LÓGICA DE COMPRESSÃO E REDIMENSIONAMENTO **
+    
+    // Converte a imagem File para um Blob comprimido
+    const compressedBlob = await new Promise((resolve, reject) => { // <-- Função principal de compressão
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const MAX_WIDTH = 800; // Largura máxima para a foto
+                let width = img.width;
+                let height = img.height;
+
+                // Lógica para redimensionar proporcionalmente a largura máxima
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+
+                // Cria um canvas temporário
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Converte o canvas para um Blob JPG comprimido (Qualidade 70%)
+                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
+            };
+            img.onerror = reject; // Trata erro de carregamento da imagem
+            img.src = event.target.result;
+        };
+        reader.onerror = reject; // Trata erro de leitura do arquivo
+        reader.readAsDataURL(fotoFile); // Usa o fotoFile original aqui
+    });
+
+    // Converte o Blob comprimido de volta para um objeto File, mantendo o nome original
+    const compressedFile = new File([compressedBlob], fotoFile.name.replace(/\.[^/.]+$/, "") + '.jpg', {
+        type: 'image/jpeg'
+    });
+    
+    // ** 2. UPLOAD DO ARQUIVO COMPRIMIDO E OBTENÇÃO DA URL **
+    
     const photoPath = `public/${pedido}_${Date.now()}.jpg`;
+    
+    // Faz o upload do arquivo COMPRIMIDO (compressedFile)
     const { data: uploadData, error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)
-        .upload(photoPath, fotoFile, {
+        .upload(photoPath, compressedFile, { // <-- ATENÇÃO: AGORA USA compressedFile
             cacheControl: '3600',
             upsert: false
         });
@@ -134,14 +180,18 @@ async function submitDelivery() {
         console.error('Erro ao fazer upload da foto:', uploadError);
         return alert('Erro ao salvar a foto. Tente novamente.');
     }
-    
-    // A) 2. Obter a URL Pública da Foto
+
+    // Obtém a URL Pública
     const { data: publicUrlData } = supabase.storage
         .from(BUCKET_NAME)
         .getPublicUrl(photoPath);
 
     const fotoUrl = publicUrlData.publicUrl;
     const assinaturaBase64 = signaturePad.toDataURL('image/png');
+
+    // --- [FIM DO NOVO BLOCO OTIMIZADO] ---
+    
+    // ... O restante da função (inserção no banco) continua inalterado ...
 
     // B) Salvar os Dados no Banco de Dados (PostgreSQL)
     const { error: dbError } = await supabase
@@ -217,4 +267,5 @@ window.onload = resizeCanvas;
 </body>
 
 </html>
+
 

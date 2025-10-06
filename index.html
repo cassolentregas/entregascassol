@@ -251,8 +251,8 @@ function showEntregadorTab(tabName) {
     document.getElementById(`tab-${tabName}-btn`).style.backgroundColor = activeColor;
 
     if (tabName === 'chat') {
-        // Garante que o chat esteja pronto para uso
-        document.getElementById('user-list-chat-entregador').innerHTML = '<p>Digite um e-mail para buscar e iniciar uma conversa.</p>';
+        // Inicializa a área de busca de chat do entregador
+        document.getElementById('user-list-chat-entregador').innerHTML = '<p>Digite um e-mail para buscar Gerentes aprovados e iniciar uma conversa.</p>';
         document.getElementById('chat-window-entregador').classList.add('hidden'); 
     }
 }
@@ -300,7 +300,6 @@ async function checkUserSession() {
         document.getElementById('login-area').classList.add('hidden');
         document.getElementById('cadastro-area').classList.add('hidden');
 
-        // Carrega a interface com a aba padrão
         if (currentUser.nivel === 1) {
             document.getElementById('entregador-area').classList.remove('hidden');
             showEntregadorTab('registro'); // Entregador começa no Registro
@@ -479,7 +478,6 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 
@@ -1119,3 +1117,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

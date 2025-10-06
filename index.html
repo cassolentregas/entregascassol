@@ -166,6 +166,7 @@ function compressImage(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
+                // Qualidade de 70%
                 canvas.toBlob(resolve, 'image/jpeg', 0.7); 
             };
             img.onerror = reject; 

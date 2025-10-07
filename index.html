@@ -1104,7 +1104,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
         return;
     }
 
-    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+    showToast(`Pedido N° ${numeroPedido} excluído com sucesso!`);
     
     // Atualiza a lista
     fetchDeliveries(document.getElementById('search-input').value.trim());

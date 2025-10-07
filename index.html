@@ -1049,7 +1049,14 @@ async function deleteAllDeliveries() {
 
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+// Ação final para garantir o carregamento do conteúdo no login
+if (currentUser.nivel === 2) {
+    document.getElementById('gerente-area').classList.remove('hidden');
+    showGerenteTab('historico'); 
+    updateAprovacaoBadge();
+}
 </script>
 </body>
 </html>
+
 

@@ -181,10 +181,911 @@
         <button onclick="handleLogout()" style="margin-top: 20px;">Sair</button>
     </div>
 
+    <script>
+// ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
+
+const BUCKET_NAME = 'comprovantes';
+const ENTREGAS_TABLE = 'entregas'; 
+const FOTOS_TABLE = 'fotos_comprovantes'; 
+const PERFIS_TABLE = 'perfis'; 
+const LOG_EXCLUSOES_TABLE = 'log_exclusoes'; 
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null; 
+let photosToUpload = []; 
+let currentChatPartnerId = null; 
+let unsubscribeRealtime = null; 
+
+// ** 2. Configuração da Assinatura e Canvas **
+const canvas = document.getElementById('signature-pad');
+const signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(238, 238, 238)' });
+function resizeCanvas() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    signaturePad.clear();
+}
+window.addEventListener('resize', resizeCanvas);
+
+
+// ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
+window.onload = function() {
+    resizeCanvas();
+    checkUserSession(); 
+    document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+};
+
+
+// Funções Auxiliares de UI
+function showRegister() {
+    document.getElementById('login-area').classList.add('hidden');
+    document.getElementById('cadastro-area').classList.remove('hidden');
+}
+function showLogin() {
+    document.getElementById('login-area').classList.remove('hidden');
+    document.getElementById('cadastro-area').classList.add('hidden');
+}
+
+// Lógica para fechar a área de detalhes
+function hideDeliveryDetails() {
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// Lógica para navegação do Submenu de Configurações
+function showConfigSubTab(tabName) {
+    const subTabs = ['aprovacao', 'logs'];
+    const activeClass = 'active';
+
+    subTabs.forEach(tab => {
+        const contentDiv = document.getElementById(`sub-tab-${tab}-content`);
+        const button = document.getElementById(`sub-tab-${tab}-btn`);
+        
+        if (contentDiv) contentDiv.classList.add('hidden');
+        if (button) button.classList.remove(activeClass);
+    });
+
+    const activeContentDiv = document.getElementById(`sub-tab-${tabName}-content`);
+    const activeButton = document.getElementById(`sub-tab-${tabName}-btn`);
+
+    if (activeContentDiv) activeContentDiv.classList.remove('hidden');
+    if (activeButton) activeButton.classList.add(activeClass);
+
+    // Dispara carregamentos específicos
+    if (tabName === 'aprovacao') loadAprovacaoPanel();
+    if (tabName === 'logs') loadExclusaoLogs(); 
+}
+
+// Navegação do Gerente (VERSÃO ROBUSTA E FINAL)
+function showGerenteTab(tabName) {
+    const activeColor = '#007bff';
+    const inactiveColor = '#0056b3';
+
+    // Referências dos botões e conteúdos
+    const aproConteudo = document.getElementById('tab-aprovacao-content');
+    const histConteudo = document.getElementById('tab-historico-content');
+    const configBtn = document.getElementById('config-btn');
+    const histBtn = document.getElementById('tab-historico-btn');
+    const configContent = document.getElementById('tab-config-content');
+
+    // 1. Reseta o layout: esconde tudo e desativa os botões
+    if (aproConteudo) aproConteudo.classList.add('hidden');
+    if (histConteudo) histConteudo.classList.add('hidden');
+    if (configContent) configContent.classList.add('hidden'); 
+
+    if (configBtn) configBtn.style.backgroundColor = inactiveColor;
+    if (histBtn) histBtn.style.backgroundColor = inactiveColor;
+
+
+    // 2. Lógica para ativar o conteúdo e o botão
+    if (tabName === 'historico') {
+        if (histConteudo) histConteudo.classList.remove('hidden');
+        if (histBtn) histBtn.style.backgroundColor = activeColor;
+        fetchDeliveries();
+    } else if (tabName === 'aprovacao' || tabName === 'config') {
+        // Ao clicar em Configurações, abre a ABA CONFIG
+        if (configContent) configContent.classList.remove('hidden'); 
+        if (configBtn) configBtn.style.backgroundColor = activeColor;
+        
+        // E dentro dela, carrega o submenu 'aprovacao' por padrão
+        showConfigSubTab('aprovacao'); 
+    }
+}
+
+// ** 3. Lógica de Persistência, Cadastro e Login **
+
+async function checkUserSession() {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+        const { data: profileData, error: profileError } = await supabase
+            .from(PERFIS_TABLE)
+            .select('status, nivel_acesso, email, nome') // Buscando o nome
+            .eq('id', user.id)
+            .single();
+
+        if (profileError || profileData.status !== 'APROVADO') {
+            await supabase.auth.signOut();
+            showLogin();
+            return;
+        }
+
+        const userMetadata = user.user_metadata || {};
+        // Puxa o nome do perfil (que foi inserido no cadastro)
+        const nomeUsuario = profileData.nome || userMetadata.nome || profileData.email.split('@')[0]; 
+
+        currentUser = { id: user.id, nivel: profileData.nivel_acesso, email: profileData.email, nome: nomeUsuario };
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('cadastro-area').classList.add('hidden');
+
+        document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+        document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+
+        if (currentUser.nivel === 1) {
+            document.getElementById('entregador-area').classList.remove('hidden');
+        } else if (currentUser.nivel === 2) {
+            document.getElementById('gerente-area').classList.remove('hidden');
+            showGerenteTab('historico'); 
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
+        }
+    } else {
+        showLogin();
+    }
+}
+// Substitua esta função no seu bloco <script>:
+async function handleRegister() {
+    const nome = document.getElementById('reg-nome').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const senha = document.getElementById('reg-senha').value.trim();
+    const nivel = parseInt(document.getElementById('reg-nivel').value);
     
+    if (!nome || !email || senha.length < 6) {
+        return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
+    }
+    
+    // 1. Cadastrar o usuário (logando-o)
+    // O Gatilho SQL (Ação 1) cuidará da inserção na tabela 'perfis'
+    const { error: signUpError } = await supabase.auth.signUp({
+        email: email,
+        password: senha,
+        options: {
+            // CRÍTICO: Passamos o nome e o nível para o Gatilho SQL via metadados
+            data: { nome: nome, nivel: nivel },
+            redirectTo: window.location.origin 
+        }
+    });
+
+    if (signUpError) {
+        if (signUpError.message.includes('already registered')) {
+            return alert('Este e-mail já está cadastrado. Tente fazer login.');
+        }
+        // Este erro agora inclui a falha de validação ou de email
+        return alert('Erro ao cadastrar. Tente novamente.');
+    }
+    
+    // 2. Desloga o usuário e informa a pendência
+    await supabase.auth.signOut();
+    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
+    showLogin(); 
+}
+
+
+        
+
+async function handleLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value.trim();
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: senha,
+    });
+
+    if (signInError) {
+        return alert('Falha no login. Verifique e-mail e senha.');
+    }
+
+    const userId = data.user.id;
+
+    const { data: profileData, error: profileError } = await supabase
+        .from(PERFIS_TABLE)
+        .select('status, nivel_acesso, email, nome') // Buscando o nome
+        .eq('id', userId)
+        .single();
+    
+    if (profileError || !profileData) {
+        return alert('Seu perfil não foi encontrado. Contate o administrador. (Verifique RLS de SELECT na tabela PERFIS).');
+    }
+
+    if (profileData.status !== 'APROVADO') {
+        await supabase.auth.signOut(); 
+        return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
+    }
+
+    const userMetadata = data.user.user_metadata || {};
+    // Prioriza o nome da tabela Perfis, depois o nome dos metadados, depois o email
+    const nomeUsuario = profileData.nome || userMetadata.nome || profileData.email.split('@')[0];
+
+    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: profileData.email, nome: nomeUsuario };
+    
+    document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+    document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+
+    document.getElementById('login-area').classList.add('hidden');
+    document.getElementById('cadastro-area').classList.add('hidden');
+
+    if (currentUser.nivel === 1) {
+        document.getElementById('entregador-area').classList.remove('hidden');
+    } else if (currentUser.nivel === 2) {
+        document.getElementById('gerente-area').classList.remove('hidden');
+        showGerenteTab('historico'); 
+        updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
+    }
+}
+
+async function handleLogout() {
+    if (unsubscribeRealtime) {
+        unsubscribeRealtime.unsubscribe(); 
+    }
+    await supabase.auth.signOut();
+    currentUser = null;
+    showLogin();
+    document.getElementById('entregador-area').classList.add('hidden');
+    document.getElementById('gerente-area').classList.add('hidden');
+    photosToUpload = []; 
+    document.getElementById('photos-preview').innerHTML = ''; 
+}
+
+// ** 4. Lógica do Painel de Aprovação e Gestão de Usuários (Gerente/Nível 2) **
+
+// NOVO: Função para contar e atualizar o badge
+async function updateAprovacaoBadge() {
+    const badgeElement = document.getElementById('aprovacao-badge');
+
+    const { count, error } = await supabase
+        .from(PERFIS_TABLE)
+        .select('id', { count: 'exact', head: true }) 
+        .eq('status', 'PENDENTE'); 
+
+    if (error) {
+        badgeElement.classList.add('hidden');
+        return;
+    }
+    
+    if (count > 0) {
+        badgeElement.textContent = count;
+        badgeElement.classList.remove('hidden');
+    } else {
+        badgeElement.classList.add('hidden');
+    }
+}
+
+
+async function loadAprovacaoPanel() {
+    const listDiv = document.getElementById('aprovacao-list');
+    listDiv.innerHTML = 'Carregando solicitações...';
+    
+    const { data, error } = await supabase
+        .from(PERFIS_TABLE)
+        .select('id, email, nivel_acesso, created_at') 
+        .eq('status', 'PENDENTE')
+        .order('created_at', { ascending: true }); 
+
+    if (error) {
+        console.error('Erro ao carregar lista de aprovação:', error);
+        listDiv.innerHTML = 'Erro ao carregar lista. Verifique a Política RLS de SELECT na tabela "perfis".';
+        return;
+    }
+
+    if (data.length === 0) {
+        listDiv.innerHTML = '<p>Nenhuma solicitação de usuário pendente.</p>';
+        return;
+    }
+
+    listDiv.innerHTML = ''; 
+    data.forEach(profile => {
+        const nivelText = profile.nivel_acesso == 2 ? 'Gerente' : 'Entregador';
+        const card = document.createElement('div');
+        card.className = 'aprovacao-card';
+        card.innerHTML = `
+            <p><strong>E-mail:</strong> ${profile.email}</p>
+            <p><strong>Cargo Solicitado:</strong> ${nivelText}</p>
+            <button onclick="aproveOrReject('${profile.id}', 'APROVADO', ${profile.nivel_acesso})">Aprovar e Ativar</button>
+            <button onclick="aproveOrReject('${profile.id}', 'REJEITADO', 0)" style="background-color: #6c757d;">Rejeitar</button>
+        `;
+        listDiv.appendChild(card);
+    });
+}
+
+async function aproveOrReject(userId, newStatus, currentNivel) {
+    if (!confirm(`Confirmar a ação: ${newStatus} para o usuário?`)) {
+        return;
+    }
+    
+    const { error } = await supabase
+        .from(PERFIS_TABLE)
+        .update({ status: newStatus })
+        .eq('id', userId);
+
+    if (error) {
+        return alert('Falha ao atualizar o status. Verifique RLS de UPDATE na tabela "perfis".');
+    }
+    
+    alert(`Usuário marcado como: ${newStatus}.`);
+    loadAprovacaoPanel(); 
+    updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
+}
+
+// NOVO: Função para carregar o Log de Exclusões (Req 5)
+async function loadExclusaoLogs() {
+    const listDiv = document.getElementById('log-exclusoes-list');
+    listDiv.innerHTML = 'Carregando logs...';
+    
+    const { data, error } = await supabase
+        .from(LOG_EXCLUSOES_TABLE)
+        .select(`
+            created_at, 
+            acao, 
+            detalhes, 
+            admin_user_id,
+            perfis!inner (email)
+        `)
+        .order('created_at', { ascending: false }); 
+
+    if (error) {
+        console.error("Erro RLS/JOIN no Log:", error);
+        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT na tabela "log_exclusoes".';
+        return;
+    }
+
+    let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
+    data.forEach(log => {
+        const adminEmail = log.perfis.email;
+        const adminNome = adminEmail.split('@')[0];
+        const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
+        const date = new Date(log.created_at).toLocaleString('pt-BR');
+        
+        html += `
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">${date}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${acaoText}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${adminNome}</td>
+            </tr>
+        `;
+    });
+    html += '</table>';
+
+    listDiv.innerHTML = html;
+}
+
+
+// ** 5. Funções de Compressão e Envio de Entrega **
+
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const MAX_WIDTH = 800; 
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
+            };
+            img.onerror = reject; 
+            img.src = event.target.result;
+        };
+        reader.onerror = reject; 
+        reader.readAsDataURL(file);
+    });
+}
+
+async function addPhotoFromInput(event) {
+    const file = event.target.files[0];
+    const previewDiv = document.getElementById('photos-preview');
+    const statusDiv = document.getElementById('photo-status');
+    statusDiv.textContent = ''; 
+    
+    if (!file) return;
+
+    statusDiv.textContent = 'Processando e compactando foto...';
+    
+    try {
+        const compressedBlob = await compressImage(file);
+        
+        const photoName = `photo_${Date.now()}.jpg`;
+        const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
+
+        photosToUpload.push(compressedFile);
+
+        const imgUrl = URL.createObjectURL(compressedBlob);
+        
+        const photoContainer = document.createElement('div');
+        photoContainer.style = 'position: relative;';
+        
+        const imgElement = document.createElement('img');
+        imgElement.src = imgUrl;
+        imgElement.style = 'max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'X';
+        deleteBtn.style = 'position: absolute; top: -5px; right: -5px; background-color: red; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;';
+        deleteBtn.onclick = function() {
+            const index = photosToUpload.indexOf(compressedFile);
+            if (index > -1) {
+                photosToUpload.splice(index, 1);
+            }
+            previewDiv.removeChild(photoContainer);
+            URL.revokeObjectURL(imgUrl); 
+            if (photosToUpload.length === 0) {
+                 statusDiv.textContent = 'Nenhuma foto anexada.';
+            } else {
+                statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+            }
+        };
+
+        photoContainer.appendChild(imgElement);
+        photoContainer.appendChild(deleteBtn);
+        previewDiv.appendChild(photoContainer);
+
+        statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
+        
+    } catch (e) {
+        console.error('Erro ao adicionar foto:', e);
+        statusDiv.textContent = 'Erro ao processar a foto.';
+    } finally {
+        event.target.value = '';
+    }
+}
+
+async function submitDelivery() {
+    if (signaturePad.isEmpty()) {
+        return alert("Assinatura do cliente é obrigatória.");
+    }
+    const pedido = document.getElementById('pedido').value.trim();
+    const endereco = document.getElementById('endereco').value.trim();
+    const cliente = document.getElementById('cliente').value.trim();
+    
+    const fotoFiles = photosToUpload; 
+
+    if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
+        return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
+    }
+
+    // 1. Inserir a Entrega PRINCIPAL, incluindo o user_id logado
+    let entregaId;
+    const { data: entregaData, error: dbError } = await supabase
+        .from(ENTREGAS_TABLE) 
+        .insert([{
+            numero_pedido: pedido,
+            endereco: endereco,
+            nome_cliente: cliente,
+            assinatura_base64: signaturePad.toDataURL('image/png'),
+            user_id: currentUser.id // CRÍTICO: Registra quem fez a entrega
+        }])
+        .select('id') 
+        .single();
+
+    if (dbError) {
+        console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
+        return alert('Erro ao registrar a entrega principal no banco.');
+    }
+    entregaId = entregaData.id;
+
+    const fotosParaInserir = []; 
+    let uploadSuccessCount = 0;
+    
+    // 2. Loop para processar e enviar CADA FOTO do array temporário
+    for (const compressedFile of fotoFiles) {
+        try {
+            const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
+            
+            const { error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(photoPath, compressedFile, { cacheControl: '3600', upsert: false });
+
+            if (uploadError) {
+                console.warn(`Falha no upload da foto: ${uploadError.message}.`);
+                continue; 
+            }
+
+            // Obter URL
+            const { data: publicUrlData } = supabase.storage
+                .from(BUCKET_NAME)
+                .getPublicUrl(photoPath);
+
+            fotosParaInserir.push({
+                entrega_id: entregaId,
+                url: publicUrlData.publicUrl
+            });
+            uploadSuccessCount++;
+
+        } catch (e) {
+            console.error('Erro durante processamento da foto:', e);
+            continue; 
+        }
+    }
+
+    // 3. Salvar as URLs das Fotos na tabela 'fotos_comprovantes'
+    if (fotosParaInserir.length > 0) {
+        const { error: fotosError } = await supabase
+            .from(FOTOS_TABLE)
+            .insert(fotosParaInserir);
+
+        if (fotosError) {
+            console.error('Erro ao salvar as URLs das fotos:', fotosError);
+            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
+        }
+    }
+
+    alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
+    
+    // 4. Limpar o formulário e a lista temporária
+    document.getElementById('pedido').value = '';
+    document.getElementById('endereco').value = '';
+    document.getElementById('cliente').value = '';
+    signaturePad.clear();
+    
+    photosToUpload = []; 
+    document.getElementById('photos-preview').innerHTML = ''; 
+    document.getElementById('photo-status').textContent = ''; 
+}
+
+
+// ** 7. Funções do Gerente (Histórico, Logs e Delete) **
+
+async function fetchDeliveries(searchQuery = '') {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = 'Carregando pedidos...';
+    
+    let query = supabase
+        .from(ENTREGAS_TABLE)
+        .select(`
+            id, 
+            numero_pedido, 
+            nome_cliente, 
+            created_at, 
+            user_id,
+            perfis!inner (email, nome)
+        `)
+        .order('created_at', { ascending: false });
+
+    if (searchQuery) {
+        query = query.ilike('numero_pedido', `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Erro ao carregar pedidos:', error);
+        listDiv.innerHTML = 'Erro ao carregar pedidos.';
+        return;
+    }
+
+    renderDeliveryList(data);
+}
+
+function renderDeliveryList(deliveries) {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = ''; 
+    
+    if (deliveries.length === 0) {
+        listDiv.innerHTML = `<p>Nenhum pedido encontrado ${document.getElementById('search-input').value ? 'com este número.' : '.'}</p>`;
+        return;
+    }
+
+    deliveries.forEach(item => {
+        const date = new Date(item.created_at).toLocaleString('pt-BR');
+        const entregadorNome = item.perfis.nome || item.perfis.email.split('@')[0]; 
+        
+        const card = document.createElement('div');
+        card.className = 'pedido-card';
+        card.innerHTML = `
+            <div onclick="showDeliveryDetails('${item.id}', '${item.numero_pedido}')" style="flex-grow: 1; margin-right: 10px;">
+                <strong>Pedido N°: ${item.numero_pedido}</strong> - ${item.nome_cliente}
+                <span style="display: block; font-size: 0.9em; color: #6c757d;">Entregador: ${entregadorNome}</span>
+                <span style="float: right; color: #666; font-size: 0.9em;">${date}</span>
+            </div>
+            <button onclick="event.stopPropagation(); deleteDelivery('${item.id}', '${item.numero_pedido}')" 
+                    class="delete-btn">
+                Excluir
+            </button>
+        `;
+        listDiv.appendChild(card);
+    });
+}
+
+function searchDeliveries() {
+    const query = document.getElementById('search-input').value.trim();
+    if (query.length >= 3 || query.length === 0) {
+        fetchDeliveries(query);
+    }
+}
+
+async function showDeliveryDetails(entregaId, numeroPedido) {
+    const detalhesDiv = document.getElementById('detalhes-pedido');
+    const conteudoDiv = document.getElementById('detalhes-conteudo');
+    
+    document.getElementById('pedido-numero-detalhe').textContent = numeroPedido;
+    detalhesDiv.classList.remove('hidden');
+    conteudoDiv.innerHTML = 'Carregando detalhes...';
+
+    const { data: entregaData, error: entregaError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .select('*')
+        .eq('id', entregaId)
+        .single();
+    
+    const { data: fotosData, error: fotosError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (entregaError || fotosError) {
+        console.error('Erro ao carregar detalhes:', entregaError || fotosError);
+        conteudoDiv.innerHTML = '<p style="color: red;">Falha ao carregar os detalhes do pedido. Verifique RLS de SELECT nas tabelas.</p>';
+        return;
+    }
+    
+    let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">';
+    if (fotosData.length === 0) {
+        fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
+    } else {
+        fotosData.forEach(foto => {
+            fotosHtml += `<img src="${foto.url}" style="max-width: 150px; max-height: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
+        });
+    }
+    fotosHtml += '</div>';
+
+    // Monta o Conteúdo Final (Assinatura com estilo inline corrigido)
+    conteudoDiv.innerHTML = `
+        <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
+        <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
+        <p><strong>Registro:</strong> ${new Date(entregaData.created_at).toLocaleString('pt-BR')}</p>
+        
+        ${fotosHtml}
+        
+        <h4 style="margin-top: 15px; margin-bottom: 5px;">Assinatura:</h4>
+        <div style="
+            margin: 0 auto 20px auto; 
+            max-width: 270px; 
+            box-sizing: border-box; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            background-color: white; 
+            text-align: center;
+        ">
+            <img 
+                src="${entregaData.assinatura_base64}" 
+                style="
+                    max-width: 100%; 
+                    height: 100px; 
+                    padding: 0; 
+                    display: block; 
+                "
+            >
+        </div>
+    `;
+}
+
+async function downloadComprovante() {
+    const elementoParaCapturar = document.getElementById('detalhes-conteudo');
+    const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
+
+    if (document.getElementById('detalhes-pedido').classList.contains('hidden')) {
+        return alert('Selecione um pedido primeiro.');
+    }
+
+    document.getElementById('download-btn').style.display = 'none';
+
+    try {
+        const canvas = await html2canvas(elementoParaCapturar, {
+            scale: 2, 
+            useCORS: true 
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg');
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4'); 
+        
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        
+        pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
+
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        alert('Houve um erro ao gerar o comprovante. Verifique o console.');
+    } finally {
+        document.getElementById('download-btn').style.display = 'block';
+    }
+}
+
+
+// NOVO: Função para Reautenticação Segura
+async function secureReauthenticate() {
+    if (!currentUser || currentUser.nivel !== 2) {
+        alert("Ação não autorizada. Apenas Gerentes podem prosseguir.");
+        return false;
+    }
+
+    const email = currentUser.email;
+    const senha = prompt(`Confirmação de Segurança: Digite sua senha atual (do login ${email}) para prosseguir com a exclusão:`);
+    
+    if (!senha) return false; // Cancelado
+
+    // Tenta fazer um novo login com a senha fornecida para verificação
+    const { error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: senha,
+    });
+
+    if (error) {
+        alert("Senha incorreta. Operação de exclusão cancelada.");
+        return false;
+    }
+    
+    // Se o login for bem-sucedido, a senha está correta.
+    return true; 
+}
+
+
+async function deleteDelivery(entregaId, numeroPedido) {
+    if (currentUser.nivel !== 2) {
+        return alert("Apenas Gerentes podem excluir pedidos.");
+    }
+    
+    // CRÍTICO: Requisito de senha antes de prosseguir
+    const authenticated = await secureReauthenticate();
+    if (!authenticated) return; 
+
+    if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
+        return;
+    }
+
+    // 1. Loga a tentativa de exclusão (Req 5)
+    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+        admin_user_id: currentUser.id,
+        acao: 'DELETE_SINGLE',
+        detalhes: `Exclusão do Pedido ${numeroPedido}`
+    }]);
+
+    // 1. Buscar fotos para obter os caminhos do Storage
+    const { data: fotosData, error: fotosFetchError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (fotosFetchError) {
+        console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
+        alert('Erro ao buscar fotos. Exclusão abortada.');
+        return;
+    }
+    
+    // 2. Excluir arquivos do Supabase Storage
+    const filesToDelete = fotosData.map(foto => {
+        const parts = foto.url.split(`${BUCKET_NAME}/`);
+        return parts.length > 1 ? parts[1] : null;
+    }).filter(path => path); 
+
+    if (filesToDelete.length > 0) {
+        const { error: storageDelError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .remove(filesToDelete);
+        
+        if (storageDelError) {
+            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
+            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
+        }
+    }
+    
+    // 3. Excluir registros do banco (ordem: filhos primeiro, pai depois)
+    
+    // Excluir registros da tabela 'fotos_comprovantes' (FILHO)
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .eq('entrega_id', entregaId);
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir registros de fotos:', fotosDelError);
+        alert(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
+        return;
+    }
+
+    // Excluir registro principal da tabela 'entregas' (PAI)
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .eq('id', entregaId);
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir registro principal:', entregaDelError);
+        alert(`Erro ao excluir pedido principal ${numeroPedido}.`);
+        return;
+    }
+
+    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+    
+    // Atualiza a lista
+    fetchDeliveries(document.getElementById('search-input').value.trim());
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** NOVO: Função para Excluir TODOS os Pedidos **
+async function deleteAllDeliveries() {
+    if (currentUser.nivel !== 2) {
+        return alert("Apenas Gerentes podem excluir todos os pedidos.");
+    }
+    
+    // CRÍTICO: Requisito de senha antes de prosseguir
+    const authenticated = await secureReauthenticate();
+    if (!authenticated) return; 
+
+    if (!confirm("CONFIRMAÇÃO EXTREMA: Você está prestes a EXCLUIR TODOS OS PEDIDOS E FOTOS. Esta ação é IRREVERSÍVEL.")) {
+        return;
+    }
+    const confirmationText = prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO' na caixa abaixo:");
+    
+    if (confirmationText !== 'DELETAR TUDO') {
+        return alert('Exclusão total cancelada.');
+    }
+
+    // Loga a tentativa de exclusão
+    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+        admin_user_id: currentUser.id,
+        acao: 'DELETE_ALL',
+        detalhes: 'Exclusão total do banco de dados'
+    }]);
+
+    // 1. Excluir todos os registros de fotos
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir TODAS as fotos:', fotosDelError);
+        return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
+    }
+    
+    // 2. Excluir todos os registros da tabela 'entregas'
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
+        return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
+    }
+
+    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
+    
+    // Atualiza a lista
+    fetchDeliveries();
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** EVENT LISTENER para a nova função de foto sequencial **
+document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+</script>
 </body>
 </html>
-
-
-
-

@@ -136,9 +136,14 @@
                 <hr style="margin: 20px 0;">
                 <div id="detalhes-pedido" style="padding: 15px; border: 1px solid var(--cor-principal); border-radius: 4px;" class="hidden">
                     <h3>Detalhes do Pedido <span id="pedido-numero-detalhe"></span></h3>
-                    <button onclick="downloadComprovante()" id="download-btn" style="width: auto; margin-bottom: 20px; background-color: #28a745;">
-                        Baixar Comprovante (PDF)
-                    </button>
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button onclick="downloadComprovante()" id="download-btn" style="width: auto; background-color: #28a745;">
+                            Baixar Comprovante (PDF)
+                        </button>
+                        <button onclick="hideDeliveryDetails()" style="width: auto; background-color: #6c757d;">
+                            Fechar Detalhes
+                        </button>
+                    </div>
                     <div id="detalhes-conteudo"></div>
                 </div>
             </div>
@@ -176,8 +181,8 @@
 
     <script>
 // ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
-const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; // ATUALIZE ESTA LINHA
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; // ATUALIZE ESTA LINHA
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
@@ -255,12 +260,12 @@ function showGerenteTab(tabName) {
     const histConteudo = document.getElementById('tab-historico-content');
     const configBtn = document.getElementById('config-btn');
     const histBtn = document.getElementById('tab-historico-btn');
-    const configContent = document.getElementById('tab-config-content'); // O contêiner de sub-abas
+    const configContent = document.getElementById('tab-config-content');
 
     // 1. Reseta o layout: esconde tudo e desativa os botões
     if (aproConteudo) aproConteudo.classList.add('hidden');
     if (histConteudo) histConteudo.classList.add('hidden');
-    if (configContent) configContent.classList.add('hidden'); // CRÍTICO: Esconde a div Configurações
+    if (configContent) configContent.classList.add('hidden'); 
 
     if (configBtn) configBtn.style.backgroundColor = inactiveColor;
     if (histBtn) histBtn.style.backgroundColor = inactiveColor;
@@ -313,8 +318,8 @@ async function checkUserSession() {
             document.getElementById('entregador-area').classList.remove('hidden');
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
-            showGerenteTab('historico'); // Gerente começa no Histórico
-            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
+            showGerenteTab('historico'); 
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
         }
     } else {
         showLogin();
@@ -520,13 +525,11 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
 }
 
-// Ação: Substituir o código loadExclusaoLogs
-
+// NOVO: Função para carregar o Log de Exclusões (Req 5)
 async function loadExclusaoLogs() {
     const listDiv = document.getElementById('log-exclusoes-list');
     listDiv.innerHTML = 'Carregando logs...';
     
-    // CRÍTICO: Join com perfis para pegar o e-mail de quem excluiu
     const { data, error } = await supabase
         .from(LOG_EXCLUSOES_TABLE)
         .select(`
@@ -539,16 +542,14 @@ async function loadExclusaoLogs() {
         .order('created_at', { ascending: false }); 
 
     if (error) {
-        // Exibe o erro de forma clara se a RLS estiver bloqueando
-        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT nas tabelas.';
         console.error("Erro RLS/JOIN no Log:", error);
+        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT na tabela "log_exclusoes".';
         return;
     }
 
     let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
     data.forEach(log => {
-        // Assegura que o nome existe antes de tentar dividi-lo
-        const adminEmail = log.perfis && log.perfis.email ? log.perfis.email : 'ADMIN DESCONHECIDO';
+        const adminEmail = log.perfis.email;
         const adminNome = adminEmail.split('@')[0];
         const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
         const date = new Date(log.created_at).toLocaleString('pt-BR');
@@ -565,6 +566,7 @@ async function loadExclusaoLogs() {
 
     listDiv.innerHTML = html;
 }
+
 
 // ** 5. Funções de Compressão e Envio de Entrega **
 
@@ -1050,195 +1052,9 @@ async function deleteAllDeliveries() {
     document.getElementById('detalhes-pedido').classList.add('hidden');
 }
 
-// ** Lógica de Adicionar Foto e Envio **
-
-function compressImage(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const MAX_WIDTH = 800; 
-                let width = img.width;
-                let height = img.height;
-
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
-            };
-            img.onerror = reject; 
-            img.src = event.target.result;
-        };
-        reader.onerror = reject; 
-        reader.readAsDataURL(file);
-    });
-}
-
-async function addPhotoFromInput(event) {
-    const file = event.target.files[0];
-    const previewDiv = document.getElementById('photos-preview');
-    const statusDiv = document.getElementById('photo-status');
-    statusDiv.textContent = ''; 
-    
-    if (!file) return;
-
-    statusDiv.textContent = 'Processando e compactando foto...';
-    
-    try {
-        const compressedBlob = await compressImage(file);
-        
-        const photoName = `photo_${Date.now()}.jpg`;
-        const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
-
-        photosToUpload.push(compressedFile);
-
-        const imgUrl = URL.createObjectURL(compressedBlob);
-        
-        const photoContainer = document.createElement('div');
-        photoContainer.style = 'position: relative;';
-        
-        const imgElement = document.createElement('img');
-        imgElement.src = imgUrl;
-        imgElement.style = 'max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;';
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'X';
-        deleteBtn.style = 'position: absolute; top: -5px; right: -5px; background-color: red; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;';
-        deleteBtn.onclick = function() {
-            const index = photosToUpload.indexOf(compressedFile);
-            if (index > -1) {
-                photosToUpload.splice(index, 1);
-            }
-            previewDiv.removeChild(photoContainer);
-            URL.revokeObjectURL(imgUrl); 
-            if (photosToUpload.length === 0) {
-                 statusDiv.textContent = 'Nenhuma foto anexada.';
-            } else {
-                statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
-            }
-        };
-
-        photoContainer.appendChild(imgElement);
-        photoContainer.appendChild(deleteBtn);
-        previewDiv.appendChild(photoContainer);
-
-        statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
-        
-    } catch (e) {
-        console.error('Erro ao adicionar foto:', e);
-        statusDiv.textContent = 'Erro ao processar a foto.';
-    } finally {
-        event.target.value = '';
-    }
-}
-
-async function submitDelivery() {
-    if (signaturePad.isEmpty()) {
-        return alert("Assinatura do cliente é obrigatória.");
-    }
-    const pedido = document.getElementById('pedido').value.trim();
-    const endereco = document.getElementById('endereco').value.trim();
-    const cliente = document.getElementById('cliente').value.trim();
-    
-    const fotoFiles = photosToUpload; 
-
-    if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
-        return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
-    }
-
-    // 1. Inserir a Entrega PRINCIPAL (para obter o ID)
-    let entregaId;
-    const { data: entregaData, error: dbError } = await supabase
-        .from(ENTREGAS_TABLE) 
-        .insert([{
-            numero_pedido: pedido,
-            endereco: endereco,
-            nome_cliente: cliente,
-            assinatura_base64: signaturePad.toDataURL('image/png'),
-            user_id: currentUser.id // CRÍTICO: Registra quem fez a entrega
-        }])
-        .select('id') 
-        .single();
-
-    if (dbError) {
-        console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
-        return alert('Erro ao registrar a entrega principal no banco.');
-    }
-    entregaId = entregaData.id;
-
-    const fotosParaInserir = []; 
-    let uploadSuccessCount = 0;
-    
-    // 2. Loop para processar e enviar CADA FOTO do array temporário
-    for (const compressedFile of fotoFiles) {
-        try {
-            const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
-            
-            const { error: uploadError } = await supabase.storage
-                .from(BUCKET_NAME)
-                .upload(photoPath, compressedFile, { cacheControl: '3600', upsert: false });
-
-            if (uploadError) {
-                console.warn(`Falha no upload da foto: ${uploadError.message}.`);
-                continue; 
-            }
-
-            // Obter URL
-            const { data: publicUrlData } = supabase.storage
-                .from(BUCKET_NAME)
-                .getPublicUrl(photoPath);
-
-            fotosParaInserir.push({
-                entrega_id: entregaId,
-                url: publicUrlData.publicUrl
-            });
-            uploadSuccessCount++;
-
-        } catch (e) {
-            console.error('Erro durante processamento da foto:', e);
-            continue; 
-        }
-    }
-
-    // 3. Salvar as URLs das Fotos na tabela 'fotos_comprovantes'
-    if (fotosParaInserir.length > 0) {
-        const { error: fotosError } = await supabase
-            .from(FOTOS_TABLE)
-            .insert(fotosParaInserir);
-
-        if (fotosError) {
-            console.error('Erro ao salvar as URLs das fotos:', fotosError);
-            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
-        }
-    }
-
-    alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
-    
-    // 4. Limpar o formulário e a lista temporária
-    document.getElementById('pedido').value = '';
-    document.getElementById('endereco').value = '';
-    document.getElementById('cliente').value = '';
-    signaturePad.clear();
-    
-    photosToUpload = []; 
-    document.getElementById('photos-preview').innerHTML = ''; 
-    document.getElementById('photo-status').textContent = ''; 
-}
-
-
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 
 </script>
 </body>
 </html>
-

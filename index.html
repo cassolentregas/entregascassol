@@ -225,7 +225,10 @@ function showLogin() {
     document.getElementById('login-area').classList.remove('hidden');
     document.getElementById('cadastro-area').classList.add('hidden');
 }
-
+// NOVO: Função para fechar a caixa de detalhes do pedido
+function hideDeliveryDetails() {
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
 // Lógica para navegação do Submenu de Configurações
 function showConfigSubTab(tabName) {
     const subTabs = ['aprovacao', 'logs'];
@@ -1243,3 +1246,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

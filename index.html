@@ -221,7 +221,7 @@ function showLogin() {
     document.getElementById('cadastro-area').classList.add('hidden');
 }
 
-// NOVO: Função para o Submenu (Necessária)
+// Lógica para navegação do Submenu de Configurações
 function showConfigSubTab(tabName) {
     const subTabs = ['aprovacao', 'logs'];
     const activeClass = 'active';
@@ -230,23 +230,24 @@ function showConfigSubTab(tabName) {
         const contentDiv = document.getElementById(`sub-tab-${tab}-content`);
         const button = document.getElementById(`sub-tab-${tab}-btn`);
         
-        // Verifica se os elementos existem antes de manipular (Segurança extra)
-        if (contentDiv) contentDiv.classList.add('hidden');
-        if (button) button.classList.remove(activeClass);
+        // Esconde e remove a classe 'active'
+        contentDiv.classList.add('hidden');
+        button.classList.remove(activeClass);
     });
 
+    // Ativa o conteúdo e o botão
     const activeContentDiv = document.getElementById(`sub-tab-${tabName}-content`);
     const activeButton = document.getElementById(`sub-tab-${tabName}-btn`);
 
-    if (activeContentDiv) activeContentDiv.classList.remove('hidden');
-    if (activeButton) activeButton.classList.add(activeClass);
+    activeContentDiv.classList.remove('hidden');
+    activeButton.classList.add(activeClass);
 
     // Dispara carregamentos específicos
     if (tabName === 'aprovacao') loadAprovacaoPanel();
     if (tabName === 'logs') loadExclusaoLogs(); 
 }
 
-// MODIFICADA: Navegação do Gerente (Corrigida a referência dos IDs e simplificada a transição)
+// Navegação do Gerente (Corrigida a referência dos IDs e simplificada a transição)
 function showGerenteTab(tabName) {
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
@@ -254,7 +255,8 @@ function showGerenteTab(tabName) {
     // 1. Reseta o layout: esconde tudo e desativa os botões
     document.getElementById('tab-aprovacao-content').classList.add('hidden');
     document.getElementById('tab-historico-content').classList.add('hidden');
-    
+    document.getElementById('tab-config-content').classList.add('hidden'); // CRÍTICO: ESCONDER A ABA CONFIG
+
     document.getElementById('config-btn').style.backgroundColor = inactiveColor;
     document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
 
@@ -265,13 +267,12 @@ function showGerenteTab(tabName) {
         document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
         fetchDeliveries();
     } else if (tabName === 'aprovacao' || tabName === 'config') {
-        // Usa 'tab-aprovacao-content' como o conteúdo de Configurações
-        document.getElementById('tab-aprovacao-content').classList.remove('hidden');
+        // Ao clicar em Configurações, abre a ABA CONFIG
+        document.getElementById('tab-config-content').classList.remove('hidden'); 
         document.getElementById('config-btn').style.backgroundColor = activeColor;
         
-        // Ao clicar em Configurações, carrega a lista de pendentes
-        loadAprovacaoPanel();
-        updateAprovacaoBadge();
+        // E dentro dela, carrega o submenu 'aprovacao' por padrão
+        showConfigSubTab('aprovacao'); 
     }
 }
 
@@ -303,13 +304,12 @@ async function checkUserSession() {
         document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
         document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
 
-
         if (currentUser.nivel === 1) {
             document.getElementById('entregador-area').classList.remove('hidden');
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
-            showGerenteTab('historico'); // Gerente começa no Histórico
-            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
+            showGerenteTab('historico'); 
+            updateAprovacaoBadge(); 
         }
     } else {
         showLogin();
@@ -423,6 +423,9 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
+    if (unsubscribeRealtime) {
+        unsubscribeRealtime.unsubscribe(); 
+    }
     await supabase.auth.signOut();
     currentUser = null;
     showLogin();
@@ -512,12 +515,12 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
 }
 
+
 // NOVO: Função para carregar o Log de Exclusões (Req 5)
 async function loadExclusaoLogs() {
     const listDiv = document.getElementById('log-exclusoes-list');
     listDiv.innerHTML = 'Carregando logs...';
     
-    // CRÍTICO: Join com perfis para pegar o e-mail de quem excluiu
     const { data, error } = await supabase
         .from(LOG_EXCLUSOES_TABLE)
         .select(`
@@ -536,7 +539,6 @@ async function loadExclusaoLogs() {
 
     let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
     data.forEach(log => {
-        // Pega o nome do admin
         const adminNome = log.perfis.email.split('@')[0];
         const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
         const date = new Date(log.created_at).toLocaleString('pt-BR');
@@ -1044,5 +1046,3 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
-
-

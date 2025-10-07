@@ -409,7 +409,7 @@ async function handleRegister() {
     
     // 2. Desloga o usuário e informa a pendência
     await supabase.auth.signOut();
-    alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
+    showToast("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
     showLogin(); 
 }
 
@@ -576,7 +576,7 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
         return showToast('Falha ao atualizar o status. Verifique RLS de UPDATE na tabela "perfis".');
     }
     
-    alert(`Usuário marcado como: ${newStatus}.`);
+    showToast(`Usuário marcado como: ${newStatus}.`);
     loadAprovacaoPanel(); 
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
 }
@@ -994,7 +994,7 @@ async function downloadComprovante() {
 
     } catch (error) {
         console.error('Erro ao gerar PDF:', error);
-        alert('Houve um erro ao gerar o comprovante. Verifique o console.');
+        showToast('Houve um erro ao gerar o comprovante. Verifique o console.');
     } finally {
         document.getElementById('download-btn').style.display = 'block';
     }
@@ -1004,7 +1004,7 @@ async function downloadComprovante() {
 // NOVO: Função para Reautenticação Segura
 async function secureReauthenticate() {
     if (!currentUser || currentUser.nivel !== 2) {
-        alert("Ação não autorizada. Apenas Gerentes podem prosseguir.");
+        showToast("Ação não autorizada. Apenas Gerentes podem prosseguir.");
         return false;
     }
 
@@ -1020,7 +1020,7 @@ async function secureReauthenticate() {
     });
 
     if (error) {
-        alert("Senha incorreta. Operação de exclusão cancelada.");
+        showToast("Senha incorreta. Operação de exclusão cancelada.");
         return false;
     }
     
@@ -1057,7 +1057,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
 
     if (fotosFetchError) {
         console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
-        alert('Erro ao buscar fotos. Exclusão abortada.');
+        showToast('Erro ao buscar fotos. Exclusão abortada.');
         return;
     }
     
@@ -1074,7 +1074,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
         
         if (storageDelError) {
             console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
-            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
+            showToast('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
         }
     }
     
@@ -1088,7 +1088,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
 
     if (fotosDelError) {
         console.error('Erro ao excluir registros de fotos:', fotosDelError);
-        alert(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
+        showToast(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
         return;
     }
 
@@ -1100,7 +1100,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
 
     if (entregaDelError) {
         console.error('Erro ao excluir registro principal:', entregaDelError);
-        alert(`Erro ao excluir pedido principal ${numeroPedido}.`);
+        showToast(`Erro ao excluir pedido principal ${numeroPedido}.`);
         return;
     }
 
@@ -1159,7 +1159,7 @@ async function deleteAllDeliveries() {
         return showToast('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
     }
 
-    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
+    showToast('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
     
     // Atualiza a lista
     fetchDeliveries();

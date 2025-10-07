@@ -1,22 +1,34 @@
-// service-worker.js (VERSÃO DE TESTE SIMPLIFICADA)
+// service-worker.js (VERSÃO DE TESTE 2: Com Dexie)
 
-const CACHE_NAME = 'comprovante-entrega-cache-v1-debug';
+// Adiciona a importação das bibliotecas
+importScripts('https://unpkg.com/dexie@3/dist/dexie.js');
+importScripts('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+
+
+// Configura o banco de dados local
+const db = new Dexie('entregas_offline');
+db.version(1).stores({
+  entregas: '++id, numero_pedido'
+});
+
+
+// --- LÓGICA BÁSICA DO SERVICE WORKER (igual a antes) ---
+
+const CACHE_NAME = 'comprovante-entrega-cache-v1-debug-dexie'; // Nome do cache atualizado
 const urlsToCache = [ '/', '/index.html', '/manifest.json' ];
 
-// 1. Instalação: Salva a "casca" do aplicativo no cache
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[SW-DEBUG] Cache aberto. Cacheando arquivos...');
+        console.log('[SW-DEBUG-2] Cache aberto. Cacheando arquivos...');
         return cache.addAll(urlsToCache);
       })
   );
-  console.log('[SW-DEBUG] Service Worker instalado.');
+  console.log('[SW-DEBUG-2] Service Worker com Dexie instalado.');
 });
 
-// 2. Ativação: Limpa caches antigos
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -26,10 +38,9 @@ self.addEventListener('activate', event => {
       );
     })
   );
-  console.log('[SW-DEBUG] Service Worker ativado.');
+  console.log('[SW-DEBUG-2] Service Worker com Dexie ativado.');
 });
 
-// 3. Fetch: Responde com o cache quando o app está offline
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
@@ -38,3 +49,4 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+

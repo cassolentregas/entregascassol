@@ -520,11 +520,13 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
 }
 
-// NOVO: Função para carregar o Log de Exclusões (Req 5)
+// Ação: Substituir o código loadExclusaoLogs
+
 async function loadExclusaoLogs() {
     const listDiv = document.getElementById('log-exclusoes-list');
     listDiv.innerHTML = 'Carregando logs...';
     
+    // CRÍTICO: Join com perfis para pegar o e-mail de quem excluiu
     const { data, error } = await supabase
         .from(LOG_EXCLUSOES_TABLE)
         .select(`
@@ -537,13 +539,17 @@ async function loadExclusaoLogs() {
         .order('created_at', { ascending: false }); 
 
     if (error) {
-        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT na tabela "log_exclusoes".';
+        // Exibe o erro de forma clara se a RLS estiver bloqueando
+        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT nas tabelas.';
+        console.error("Erro RLS/JOIN no Log:", error);
         return;
     }
 
     let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
     data.forEach(log => {
-        const adminNome = log.perfis.email.split('@')[0];
+        // Assegura que o nome existe antes de tentar dividi-lo
+        const adminEmail = log.perfis && log.perfis.email ? log.perfis.email : 'ADMIN DESCONHECIDO';
+        const adminNome = adminEmail.split('@')[0];
         const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
         const date = new Date(log.created_at).toLocaleString('pt-BR');
         
@@ -559,7 +565,6 @@ async function loadExclusaoLogs() {
 
     listDiv.innerHTML = html;
 }
-
 
 // ** 5. Funções de Compressão e Envio de Entrega **
 
@@ -1236,3 +1241,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

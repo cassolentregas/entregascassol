@@ -169,9 +169,15 @@ window.addEventListener('resize', resizeCanvas);
 
 
 // ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
+// ** CORRIGIDO: Inicialização para garantir que os botões funcionem **
 window.onload = function() {
-    resizeCanvas();
+    // 1. Apenas faz o resize inicial do canvas
+    resizeCanvas(); 
+    
+    // 2. Garante que a sessão seja verificada para carregar a tela correta
     checkUserSession(); 
+    
+    // 3. Ativa o listener de foto sequencial
     document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 };
 
@@ -958,4 +964,5 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+
 

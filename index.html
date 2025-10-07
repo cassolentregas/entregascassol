@@ -181,8 +181,8 @@
 
     <script>
 // ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
-const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; // ATUALIZE ESTA LINHA
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; // ATUALIZE ESTA LINHA
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
@@ -230,7 +230,6 @@ function showLogin() {
 function hideDeliveryDetails() {
     document.getElementById('detalhes-pedido').classList.add('hidden');
 }
-
 
 // Lógica para navegação do Submenu de Configurações
 function showConfigSubTab(tabName) {
@@ -325,7 +324,7 @@ async function checkUserSession() {
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
             showGerenteTab('historico'); 
-            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
         }
     } else {
         showLogin();
@@ -369,7 +368,7 @@ async function handleRegister() {
             .from(PERFIS_TABLE)
             .insert([{
                 id: authData.user.id,
-                email: authData.user.email,
+                email: email,
                 nivel_acesso: nivel, 
                 status: 'PENDENTE'
             }]);
@@ -759,8 +758,309 @@ async function submitDelivery() {
 }
 
 
+// ** 7. Funções do Gerente (Histórico, Logs e Delete) **
+
+async function fetchDeliveries(searchQuery = '') {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = 'Carregando pedidos...';
+    
+    let query = supabase
+        .from(ENTREGAS_TABLE)
+        .select(`
+            id, 
+            numero_pedido, 
+            nome_cliente, 
+            created_at, 
+            user_id,
+            perfis!inner (email, nome) // CORREÇÃO: Buscando nome e email
+        `)
+        .order('created_at', { ascending: false });
+
+    if (searchQuery) {
+        query = query.ilike('numero_pedido', `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('Erro ao carregar pedidos:', error);
+        listDiv.innerHTML = 'Erro ao carregar pedidos.';
+        return;
+    }
+
+    renderDeliveryList(data);
+}
+
+function renderDeliveryList(deliveries) {
+    const listDiv = document.getElementById('historico-list');
+    listDiv.innerHTML = ''; 
+    
+    if (deliveries.length === 0) {
+        listDiv.innerHTML = `<p>Nenhum pedido encontrado ${document.getElementById('search-input').value ? 'com este número.' : '.'}</p>`;
+        return;
+    }
+
+    deliveries.forEach(item => {
+        // CORREÇÃO: Usa o NOME completo (ou email se o nome for nulo)
+        const entregadorNome = item.perfis.nome || item.perfis.email.split('@')[0]; 
+        const date = new Date(item.created_at).toLocaleString('pt-BR');
+        
+        const card = document.createElement('div');
+        card.className = 'pedido-card';
+        card.innerHTML = `
+            <div onclick="showDeliveryDetails('${item.id}', '${item.numero_pedido}')" style="flex-grow: 1; margin-right: 10px;">
+                <strong>Pedido N°: ${item.numero_pedido}</strong> - ${item.nome_cliente}
+                <span style="display: block; font-size: 0.9em; color: #6c757d;">Entregador: ${entregadorNome}</span>
+                <span style="float: right; color: #666; font-size: 0.9em;">${date}</span>
+            </div>
+            <button onclick="event.stopPropagation(); deleteDelivery('${item.id}', '${item.numero_pedido}')" 
+                    class="delete-btn">
+                Excluir
+            </button>
+        `;
+        listDiv.appendChild(card);
+    });
+}
+
+function searchDeliveries() {
+    const query = document.getElementById('search-input').value.trim();
+    if (query.length >= 3 || query.length === 0) {
+        fetchDeliveries(query);
+    }
+}
+
+async function showDeliveryDetails(entregaId, numeroPedido) {
+    const detalhesDiv = document.getElementById('detalhes-pedido');
+    const conteudoDiv = document.getElementById('detalhes-conteudo');
+    
+    document.getElementById('pedido-numero-detalhe').textContent = numeroPedido;
+    detalhesDiv.classList.remove('hidden');
+    conteudoDiv.innerHTML = 'Carregando detalhes...';
+
+    const { data: entregaData, error: entregaError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .select('*')
+        .eq('id', entregaId)
+        .single();
+    
+    const { data: fotosData, error: fotosError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (entregaError || fotosError) {
+        console.error('Erro ao carregar detalhes:', entregaError || fotosError);
+        conteudoDiv.innerHTML = '<p style="color: red;">Falha ao carregar os detalhes do pedido. Verifique RLS de SELECT nas tabelas.</p>';
+        return;
+    }
+    
+    let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">';
+    if (fotosData.length === 0) {
+        fotosHtml += '<p>Nenhuma foto anexada para este pedido.</p>';
+    } else {
+        fotosData.forEach(foto => {
+            fotosHtml += `<img src="${foto.url}" style="max-width: 150px; max-height: 150px; height: auto; border: 1px solid #333; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
+        });
+    }
+    fotosHtml += '</div>';
+
+    // Monta o Conteúdo Final (Assinatura com estilo inline corrigido)
+    conteudoDiv.innerHTML = `
+        <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
+        <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
+        <p><strong>Registro:</strong> ${new Date(entregaData.created_at).toLocaleString('pt-BR')}</p>
+        
+        ${fotosHtml}
+        
+        <h4 style="margin-top: 15px; margin-bottom: 5px;">Assinatura:</h4>
+        <div style="
+            margin: 0 auto 20px auto; 
+            max-width: 270px; 
+            box-sizing: border-box; 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            background-color: white; 
+            text-align: center;
+        ">
+            <img 
+                src="${entregaData.assinatura_base64}" 
+                style="
+                    max-width: 100%; 
+                    height: 100px; 
+                    padding: 0; 
+                    display: block; 
+                "
+            >
+        </div>
+    `;
+}
+
+async function downloadComprovante() {
+    const elementoParaCapturar = document.getElementById('detalhes-conteudo');
+    const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
+
+    if (document.getElementById('detalhes-pedido').classList.contains('hidden')) {
+        return alert('Selecione um pedido primeiro.');
+    }
+
+    document.getElementById('download-btn').style.display = 'none';
+
+    try {
+        const canvas = await html2canvas(elementoParaCapturar, {
+            scale: 2, 
+            useCORS: true 
+        });
+
+        const imgData = canvas.toDataURL('image/jpeg');
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4'); 
+        
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        
+        pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
+
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        alert('Houve um erro ao gerar o comprovante. Verifique o console.');
+    } finally {
+        document.getElementById('download-btn').style.display = 'block';
+    }
+}
+
+
+async function deleteDelivery(entregaId, numeroPedido) {
+    if (currentUser.nivel !== 2) {
+        return alert("Apenas Gerentes podem excluir pedidos.");
+    }
+
+    if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
+        return;
+    }
+
+    // 1. Loga a tentativa de exclusão (Req 5)
+    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+        admin_user_id: currentUser.id,
+        acao: 'DELETE_SINGLE',
+        detalhes: `Exclusão do Pedido ${numeroPedido}`
+    }]);
+
+    // 1. Buscar fotos para obter os caminhos do Storage
+    const { data: fotosData, error: fotosFetchError } = await supabase
+        .from(FOTOS_TABLE)
+        .select('url')
+        .eq('entrega_id', entregaId);
+
+    if (fotosFetchError) {
+        console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
+        alert('Erro ao buscar fotos. Exclusão abortada.');
+        return;
+    }
+    
+    // 2. Excluir arquivos do Supabase Storage
+    const filesToDelete = fotosData.map(foto => {
+        const parts = foto.url.split(`${BUCKET_NAME}/`);
+        return parts.length > 1 ? parts[1] : null;
+    }).filter(path => path); 
+
+    if (filesToDelete.length > 0) {
+        const { error: storageDelError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .remove(filesToDelete);
+        
+        if (storageDelError) {
+            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
+            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
+        }
+    }
+    
+    // 3. Excluir registros do banco (ordem: filhos primeiro, pai depois)
+    
+    // Excluir registros da tabela 'fotos_comprovantes' (FILHO)
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .eq('entrega_id', entregaId);
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir registros de fotos:', fotosDelError);
+        alert(`Erro ao excluir registros de fotos para ${numeroPedido}.`);
+        return;
+    }
+
+    // Excluir registro principal da tabela 'entregas' (PAI)
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .eq('id', entregaId);
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir registro principal:', entregaDelError);
+        alert(`Erro ao excluir pedido principal ${numeroPedido}.`);
+        return;
+    }
+
+    alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+    
+    // Atualiza a lista
+    fetchDeliveries(document.getElementById('search-input').value.trim());
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
+// ** NOVO: Função para Excluir TODOS os Pedidos **
+async function deleteAllDeliveries() {
+    if (!confirm("CONFIRMAÇÃO EXTREMA: Você está prestes a EXCLUIR TODOS OS PEDIDOS E FOTOS. Esta ação é IRREVERSÍVEL.")) {
+        return;
+    }
+    const confirmationText = prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO' na caixa abaixo:");
+    
+    if (confirmationText !== 'DELETAR TUDO') {
+        return alert('Exclusão total cancelada.');
+    }
+
+    // Loga a tentativa de exclusão
+    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+        admin_user_id: currentUser.id,
+        acao: 'DELETE_ALL',
+        detalhes: 'Exclusão total do banco de dados'
+    }]);
+
+    // 1. Excluir todos os registros de fotos
+    const { error: fotosDelError } = await supabase
+        .from(FOTOS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (fotosDelError) {
+        console.error('Erro ao excluir TODAS as fotos:', fotosDelError);
+        return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
+    }
+    
+    // 2. Excluir todos os registros da tabela 'entregas'
+    const { error: entregaDelError } = await supabase
+        .from(ENTREGAS_TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); 
+
+    if (entregaDelError) {
+        console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
+        return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
+    }
+
+    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');
+    
+    // Atualiza a lista
+    fetchDeliveries();
+    document.getElementById('detalhes-pedido').classList.add('hidden');
+}
+
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
+
 </script>
 </body>
 </html>

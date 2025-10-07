@@ -716,8 +716,18 @@ async function addPhotoFromInput(event) {
 }
 
 async function submitDelivery() {
+    // INÍCIO: Lógica do botão de loading
+    const btn = document.querySelector('#entregador-area button[onclick="submitDelivery()"]');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Enviando...`;
+
+    // A partir daqui, seu código original é mantido
     if (signaturePad.isEmpty()) {
-        return showToast("Assinatura do cliente é obrigatória.");
+        showToast("Assinatura do cliente é obrigatória.", "error");
+        // RESTAURA O BOTÃO antes de sair por erro
+        btn.disabled = false;
+        btn.innerHTML = "Registrar Entrega";
+        return;
     }
     const pedido = document.getElementById('pedido').value.trim();
     const endereco = document.getElementById('endereco').value.trim();
@@ -726,10 +736,14 @@ async function submitDelivery() {
     const fotoFiles = photosToUpload; 
 
     if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
-        return showToast("Todos os campos e pelo menos uma foto são obrigatórios.");
+        showToast("Todos os campos e pelo menos uma foto são obrigatórios.", "error");
+        // RESTAURA O BOTÃO antes de sair por erro
+        btn.disabled = false;
+        btn.innerHTML = "Registrar Entrega";
+        return;
     }
 
-    // 1. Inserir a Entrega PRINCIPAL, incluindo o user_id logado
+    // Declaração de `entregaId` no escopo da função, como no seu original
     let entregaId;
     const { data: entregaData, error: dbError } = await supabase
         .from(ENTREGAS_TABLE) 
@@ -738,22 +752,25 @@ async function submitDelivery() {
             endereco: endereco,
             nome_cliente: cliente,
             assinatura_base64: signaturePad.toDataURL('image/png'),
-            user_id: currentUser.id // CRÍTICO: Registra quem fez a entrega
+            user_id: currentUser.id
         }])
         .select('id') 
         .single();
 
     if (dbError) {
         console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
-        return showToast('Erro ao registrar a entrega principal no banco.');
+        showToast('Erro ao registrar a entrega principal no banco.', 'error');
+        // RESTAURA O BOTÃO antes de sair por erro
+        btn.disabled = false;
+        btn.innerHTML = "Registrar Entrega";
+        return;
     }
     entregaId = entregaData.id;
 
     const fotosParaInserir = []; 
     let uploadSuccessCount = 0;
     
-    // 2. Loop para processar e enviar CADA FOTO do array temporário
-    for (const compressedFile of fotoFiles) {
+    for (const compressedFile of fotoFiles) { // Usando `fotoFiles` como no seu original
         try {
             const photoPath = `public/${entregaId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`; 
             
@@ -766,7 +783,6 @@ async function submitDelivery() {
                 continue; 
             }
 
-            // Obter URL
             const { data: publicUrlData } = supabase.storage
                 .from(BUCKET_NAME)
                 .getPublicUrl(photoPath);
@@ -783,7 +799,6 @@ async function submitDelivery() {
         }
     }
 
-    // 3. Salvar as URLs das Fotos na tabela 'fotos_comprovantes'
     if (fotosParaInserir.length > 0) {
         const { error: fotosError } = await supabase
             .from(FOTOS_TABLE)
@@ -791,13 +806,13 @@ async function submitDelivery() {
 
         if (fotosError) {
             console.error('Erro ao salvar as URLs das fotos:', fotosError);
-            alert(`Atenção: A entrega principal foi salva, mas ${uploadSuccessCount} foto(s) não foram linkadas corretamente ao pedido!`);
+            showToast(`Atenção: A entrega foi salva, mas algumas fotos não foram linkadas!`, 'info');
         }
     }
 
-    alert(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`);
+    showToast(`Entrega ${pedido} registrada com sucesso. ${uploadSuccessCount} foto(s) enviada(s)!`, 'success');
     
-    // 4. Limpar o formulário e a lista temporária
+    // Limpeza do formulário, como no seu original
     document.getElementById('pedido').value = '';
     document.getElementById('endereco').value = '';
     document.getElementById('cliente').value = '';
@@ -805,9 +820,12 @@ async function submitDelivery() {
     
     photosToUpload = []; 
     document.getElementById('photos-preview').innerHTML = ''; 
-    document.getElementById('photo-status').textContent = ''; 
-}
+    document.getElementById('photo-status').textContent = '';
 
+    // RESTAURA O BOTÃO no final do sucesso
+    btn.disabled = false;
+    btn.innerHTML = "Registrar Entrega";
+}
 
 // ** 7. Funções do Gerente (Histórico, Logs e Delete) **
 

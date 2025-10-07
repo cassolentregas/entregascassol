@@ -32,6 +32,28 @@
         .delete-btn:hover { background-color: #c82333; }
         .aprovacao-card { border: 1px solid #ffc107; padding: 10px; margin-bottom: 10px; background-color: #fff3cd; }
         .aprovacao-card button { width: auto; margin: 5px 5px 0 0; }
+        
+        /* ESTILOS PARA O SUBMENU */
+        .sub-menu-bar { margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .sub-menu-bar button { width: auto; padding: 8px 12px; margin-bottom: 0; background-color: #495057; }
+        .sub-menu-bar button.active { background-color: #007bff; }
+        
+        /* BADGE DE NOTIFICAÇÃO */
+        #config-btn { position: relative; }
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: 1;
+            min-width: 15px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -96,7 +118,7 @@
 
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                 <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #007bff;">Histórico</button>
-                <button id="config-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #0056b3;">
+                <button id="config-btn" onclick="showGerenteTab('config')" style="width: auto; background-color: #0056b3;">
                     Configurações 
                     <span id="aprovacao-badge" class="notification-badge hidden"></span>
                 </button>
@@ -121,11 +143,29 @@
                 </div>
             </div>
 
-            <div id="tab-aprovacao-content" class="tab-content hidden">
-                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                    <h3>Aprovação de Usuários Pendentes</h3>
-                    <div id="aprovacao-list">
-                        <p>Carregando solicitações...</p>
+            <div id="tab-config-content" class="tab-content hidden">
+                <h3>Configurações e Administração</h3>
+                
+                <div class="sub-menu-bar">
+                    <button id="sub-tab-aprovacao-btn" class="active" onclick="showConfigSubTab('aprovacao')">Aprovação de Usuários</button>
+                    <button id="sub-tab-logs-btn" onclick="showConfigSubTab('logs')">Log de Exclusão</button>
+                </div>
+
+                <div id="sub-tab-aprovacao-content" class="sub-tab-content">
+                    <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                        <h3>Aprovação de Usuários Pendentes</h3>
+                        <div id="aprovacao-list">
+                            <p>Carregando solicitações...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="sub-tab-logs-content" class="sub-tab-content hidden">
+                    <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                        <h3>Registro de Exclusões</h3>
+                        <div id="log-exclusoes-list">
+                            <p>Carregando logs...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -136,15 +176,14 @@
 
     <script>
 // ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
-const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; // ATUALIZE ESTA LINHA
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; // ATUALIZE ESTA LINHA
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
 const FOTOS_TABLE = 'fotos_comprovantes'; 
 const PERFIS_TABLE = 'perfis'; 
 const LOG_EXCLUSOES_TABLE = 'log_exclusoes'; 
-const SECURITY_PIN = "123456"; // SENHA DE EXCLUSÃO FIXA (REMOVIDA LOGICA AGORA)
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -161,6 +200,8 @@ function resizeCanvas() {
     canvas.height = canvas.offsetHeight;
     signaturePad.clear();
 }
+window.addEventListener('resize', resizeCanvas);
+
 
 // ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
 window.onload = function() {
@@ -168,7 +209,6 @@ window.onload = function() {
     checkUserSession(); 
     document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 };
-window.addEventListener('resize', resizeCanvas);
 
 
 // Funções Auxiliares de UI
@@ -181,31 +221,49 @@ function showLogin() {
     document.getElementById('cadastro-area').classList.add('hidden');
 }
 
-// Navegação do Gerente
+// Lógica para navegação do Submenu de Configurações
+function showConfigSubTab(tabName) {
+    const subTabs = ['aprovacao', 'logs'];
+    const activeClass = 'active';
+
+    subTabs.forEach(tab => {
+        const contentDiv = document.getElementById(`sub-tab-${tab}-content`);
+        const button = document.getElementById(`sub-tab-${tab}-btn`);
+        
+        contentDiv.classList.add('hidden');
+        button.classList.remove(activeClass);
+    });
+
+    const activeContentDiv = document.getElementById(`sub-tab-${tabName}-content`);
+    const activeButton = document.getElementById(`sub-tab-${tabName}-btn`);
+
+    activeContentDiv.classList.remove('hidden');
+    activeButton.classList.add(activeClass);
+
+    // Dispara carregamentos específicos
+    if (tabName === 'aprovacao') loadAprovacaoPanel();
+    if (tabName === 'logs') loadExclusaoLogs(); // Nova função para carregar logs
+}
+
+// Navegação do Gerente (MODIFICADA para abrir o submenu)
 function showGerenteTab(tabName) {
-    const tabs = ['aprovacao', 'historico'];
+    const tabs = ['config', 'historico'];
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
-    // Desativa todas as abas de conteúdo
     tabs.forEach(tab => {
         document.getElementById(`tab-${tab}-content`).classList.add('hidden');
+        document.getElementById(`${tab}-btn`).style.backgroundColor = inactiveColor;
     });
-    
-    // Desativa todos os botões (Configurações e Histórico)
-    document.getElementById('config-btn').style.backgroundColor = inactiveColor;
-    document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
 
+    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
+    document.getElementById(`${tabName}-btn`).style.backgroundColor = activeColor;
 
-    // Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
-        document.getElementById(`tab-historico-content`).classList.remove('hidden');
-        document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
         fetchDeliveries();
-    } else if (tabName === 'aprovacao') {
-        document.getElementById(`tab-aprovacao-content`).classList.remove('hidden');
-        document.getElementById('config-btn').style.backgroundColor = activeColor;
-        loadAprovacaoPanel(); // Carrega o painel de pendentes
+    } else if (tabName === 'config') {
+        // Ao clicar em Configurações, abre a sub-aba 'aprovacao' por padrão
+        showConfigSubTab('aprovacao'); 
     }
 }
 
@@ -237,19 +295,20 @@ async function checkUserSession() {
         document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
         document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
 
+
         if (currentUser.nivel === 1) {
             document.getElementById('entregador-area').classList.remove('hidden');
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
             showGerenteTab('historico'); // Gerente começa no Histórico
-            updateAprovacaoBadge(); // CRÍTICO: CHAMA A ATUALIZAÇÃO DO BADGE
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
         }
     } else {
         showLogin();
     }
 }
 
-// ** VERSÃO CORRIGIDA QUE INSERE O PERFIL PENDENTE **
+// VERSÃO CORRIGIDA QUE INSERE O PERFIL PENDENTE
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -356,9 +415,6 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
-    if (unsubscribeRealtime) {
-        unsubscribeRealtime.unsubscribe(); 
-    }
     await supabase.auth.signOut();
     currentUser = null;
     showLogin();
@@ -368,7 +424,7 @@ async function handleLogout() {
     document.getElementById('photos-preview').innerHTML = ''; 
 }
 
-// ** 4. Lógica do Painel de Aprovação (Gerente/Nível 2) **
+// ** 4. Lógica do Painel de Aprovação e Gestão de Usuários (Gerente/Nível 2) **
 
 // NOVO: Função para contar e atualizar o badge
 async function updateAprovacaoBadge() {
@@ -446,6 +502,48 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     alert(`Usuário marcado como: ${newStatus}.`);
     loadAprovacaoPanel(); 
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
+}
+
+// NOVO: Função para carregar o Log de Exclusões (Req 5)
+async function loadExclusaoLogs() {
+    const listDiv = document.getElementById('log-exclusoes-list');
+    listDiv.innerHTML = 'Carregando logs...';
+    
+    // CRÍTICO: Join com perfis para pegar o e-mail de quem excluiu
+    const { data, error } = await supabase
+        .from(LOG_EXCLUSOES_TABLE)
+        .select(`
+            created_at, 
+            acao, 
+            detalhes, 
+            admin_user_id,
+            perfis!inner (email)
+        `)
+        .order('created_at', { ascending: false }); 
+
+    if (error) {
+        listDiv.innerHTML = 'Erro ao carregar logs. Verifique a Política RLS de SELECT na tabela "log_exclusoes".';
+        return;
+    }
+
+    let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
+    data.forEach(log => {
+        // Pega o nome do admin
+        const adminNome = log.perfis.email.split('@')[0];
+        const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
+        const date = new Date(log.created_at).toLocaleString('pt-BR');
+        
+        html += `
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">${date}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${acaoText}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${adminNome}</td>
+            </tr>
+        `;
+    });
+    html += '</table>';
+
+    listDiv.innerHTML = html;
 }
 
 

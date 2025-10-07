@@ -798,31 +798,32 @@ async function deleteDelivery(entregaId, numeroPedido) {
         return alert("Apenas Gerentes podem excluir pedidos.");
     }
     
-    const pin = prompt(`CONFIRMAÇÃO: Digite a senha de exclusão (PIN) para deletar o pedido N° ${numeroPedido}:`);
-    
-    if (pin !== DELETE_PIN) {
-        return alert("PIN incorreto. Exclusão cancelada.");
-    }
+    // NOVO: Requisito de senha antes de prosseguir
+    const authenticated = await secureReauthenticate();
+    if (!authenticated) return; 
 
-    if (!confirm(`Tem certeza que deseja EXCLUIR? Esta ação é IRREVERSÍVEL.`)) {
+    if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido} e todas as suas fotos? Esta ação é IRREVERSÍVEL.`)) {
         return;
     }
 
     // 1. Loga a tentativa de exclusão (Req 5)
-    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+    // Omitido do corpo para foco, mas estava no código anterior.
+
+    // ... (restante da lógica de exclusão - busca de fotos, delete storage/db) ...
+    // ... (MANTENHA TODO O CORPO ORIGINAL DA FUNÇÃO ABAIXO DESTE PONTO) ...
+    
+    // 1. Loga a tentativa de exclusão (Req 5)
+    await supabase.from('log_exclusoes').insert([{
         admin_user_id: currentUser.id,
         acao: 'DELETE_SINGLE',
         detalhes: `Exclusão do Pedido ${numeroPedido}`
     }]);
-    
-    // ... (restante da lógica de exclusão) ...
     
     // 1. Buscar fotos para obter os caminhos do Storage
     const { data: fotosData, error: fotosFetchError } = await supabase
         .from(FOTOS_TABLE)
         .select('url')
         .eq('entrega_id', entregaId);
-    // ... (restante da lógica de exclusão) ...
 
     if (fotosFetchError) {
         console.error('Erro ao buscar fotos para exclusão:', fotosFetchError);
@@ -842,8 +843,8 @@ async function deleteDelivery(entregaId, numeroPedido) {
             .remove(filesToDelete);
         
         if (storageDelError) {
-            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket.');
-            alert('Aviso: Falha ao excluir arquivos do Storage.');
+            console.warn('AVISO: Falha ao excluir arquivos do Storage. Eles podem ter permanecido no bucket. Verifique RLS de DELETE do Storage.', storageDelError);
+            alert('Aviso: Falha ao excluir arquivos do Storage. Verifique se a Política RLS de DELETE do Storage está correta.');
         }
     }
     
@@ -885,12 +886,10 @@ async function deleteAllDeliveries() {
     if (currentUser.nivel !== 2) {
         return alert("Apenas Gerentes podem excluir todos os pedidos.");
     }
-    
-    const pin = prompt(`CONFIRMAÇÃO: Digite a senha de exclusão (PIN) para deletar TODOS os pedidos:`);
-    
-    if (pin !== DELETE_PIN) {
-        return alert("PIN incorreto. Exclusão cancelada.");
-    }
+
+    // NOVO: Requisito de senha antes de prosseguir
+    const authenticated = await secureReauthenticate();
+    if (!authenticated) return; 
 
     if (!confirm("CONFIRMAÇÃO EXTREMA: Você está prestes a EXCLUIR TODOS OS PEDIDOS E FOTOS. Esta ação é IRREVERSÍVEL.")) {
         return;
@@ -900,14 +899,17 @@ async function deleteAllDeliveries() {
     if (confirmationText !== 'DELETAR TUDO') {
         return alert('Exclusão total cancelada.');
     }
-    
-    // Loga a tentativa de exclusão (Req 5)
-    await supabase.from(LOG_EXCLUSOES_TABLE).insert([{
+
+    // 1. Loga a tentativa de exclusão (Req 5)
+    await supabase.from('log_exclusoes').insert([{
         admin_user_id: currentUser.id,
         acao: 'DELETE_ALL',
         detalhes: 'Exclusão total do banco de dados'
     }]);
 
+    // ... (restante da lógica de exclusão) ...
+    // ... (MANTENHA TODO O CORPO ORIGINAL DA FUNÇÃO ABAIXO DESTE PONTO) ...
+    
     // 1. Excluir todos os registros de fotos
     const { error: fotosDelError } = await supabase
         .from(FOTOS_TABLE)
@@ -929,17 +931,31 @@ async function deleteAllDeliveries() {
         console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
         return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
     }
-
-    alert('TODOS os pedidos foram excluídos com sucesso do banco de dados!');
+// NOVO: Função para Reautenticação Segura
+async function secureReauthenticate() {
+    const email = currentUser.email;
+    const senha = prompt(`Confirmação de Segurança: Digite sua senha para prosseguir com a exclusão do pedido ${email}:`);
     
-    // Atualiza a lista
-    fetchDeliveries();
-    document.getElementById('detalhes-pedido').classList.add('hidden');
-}
+    if (!senha) return false; // Cancelado
+    
+    // Tenta fazer um novo login com a senha fornecida
+    const { error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: senha,
+    });
 
+    if (error) {
+        alert("Senha incorreta. Operação de exclusão cancelada.");
+        return false;
+    }
+    
+    // Se o login for bem-sucedido, o usuário é autenticado e prossegue.
+    return true; 
+}
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 
 </script>
 </body>
 </html>
+

@@ -221,7 +221,7 @@ function showLogin() {
     document.getElementById('cadastro-area').classList.add('hidden');
 }
 
-// Lógica para navegação do Submenu de Configurações
+// NOVO: Função para o Submenu (Necessária)
 function showConfigSubTab(tabName) {
     const subTabs = ['aprovacao', 'logs'];
     const activeClass = 'active';
@@ -230,39 +230,46 @@ function showConfigSubTab(tabName) {
         const contentDiv = document.getElementById(`sub-tab-${tab}-content`);
         const button = document.getElementById(`sub-tab-${tab}-btn`);
         
-        contentDiv.classList.add('hidden');
-        button.classList.remove(activeClass);
+        // Verifica se os elementos existem antes de manipular (Segurança extra)
+        if (contentDiv) contentDiv.classList.add('hidden');
+        if (button) button.classList.remove(activeClass);
     });
 
     const activeContentDiv = document.getElementById(`sub-tab-${tabName}-content`);
     const activeButton = document.getElementById(`sub-tab-${tabName}-btn`);
 
-    activeContentDiv.classList.remove('hidden');
-    activeButton.classList.add(activeClass);
+    if (activeContentDiv) activeContentDiv.classList.remove('hidden');
+    if (activeButton) activeButton.classList.add(activeClass);
 
     // Dispara carregamentos específicos
     if (tabName === 'aprovacao') loadAprovacaoPanel();
-    if (tabName === 'logs') loadExclusaoLogs(); // Nova função para carregar logs
+    if (tabName === 'logs') loadExclusaoLogs(); 
 }
 
-// Navegação do Gerente (MODIFICADA para abrir o submenu)
+// MODIFICADA: Navegação do Gerente (CORRIGIDA A REFERÊNCIA DO BOTÃO 'CONFIG')
 function showGerenteTab(tabName) {
-    const tabs = ['config', 'historico'];
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
-    tabs.forEach(tab => {
-        document.getElementById(`tab-${tab}-content`).classList.add('hidden');
-        document.getElementById(`${tab}-btn`).style.backgroundColor = inactiveColor;
-    });
+    // Esconde as duas abas de conteúdo
+    document.getElementById('tab-aprovacao-content').classList.add('hidden');
+    document.getElementById('tab-historico-content').classList.add('hidden');
+    
+    // Reseta as cores dos botões de NÍVEL 1
+    document.getElementById('config-btn').style.backgroundColor = inactiveColor;
+    document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
 
-    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
-    document.getElementById(`${tabName}-btn`).style.backgroundColor = activeColor;
 
+    // Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
+        document.getElementById('tab-historico-content').classList.remove('hidden');
+        document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
         fetchDeliveries();
     } else if (tabName === 'config') {
-        // Ao clicar em Configurações, abre a sub-aba 'aprovacao' por padrão
+        // Ao clicar em Configurações, abre o sub-menu de Aprovação
+        document.getElementById('tab-aprovacao-content').classList.remove('hidden');
+        document.getElementById('config-btn').style.backgroundColor = activeColor;
+        // Chama o submenu e carrega o painel de pendentes
         showConfigSubTab('aprovacao'); 
     }
 }
@@ -1036,3 +1043,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

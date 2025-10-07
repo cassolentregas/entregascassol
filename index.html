@@ -55,9 +55,19 @@
             min-width: 15px;
             text-align: center;
         }
+        /* --- ESTILOS PARA AS NOVAS NOTIFICAÇÕES (TOASTS) --- */
+        #notification-container { position: fixed; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 15px 20px; color: white; font-size: 14px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; animation: fadeIn 0.5s forwards; }
+        .toast.fade-out { animation: fadeOut 0.5s forwards; }
+        .toast.success { background-color: #28a745; }
+        .toast.error { background-color: #dc3545; }
+        .toast.info { background-color: #17a2b8; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
     </style>
 </head>
 <body>
+    <div id="notification-container"></div>
     <div class="container">
         
         <div id="login-area">
@@ -207,6 +217,18 @@ function resizeCanvas() {
     signaturePad.clear();
 }
 window.addEventListener('resize', resizeCanvas);
+        
+function showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('notification-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => { toast.remove(); }, 500);
+    }, duration);
+}
 
 
 // ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
@@ -340,7 +362,7 @@ async function handleRegister() {
     const nivel = parseInt(document.getElementById('reg-nivel').value);
     
     if (!nome || !email || senha.length < 6) {
-        return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
+        return showToast("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
     // 1. Cadastrar o usuário (logando-o)
@@ -357,10 +379,10 @@ async function handleRegister() {
 
     if (signUpError) {
         if (signUpError.message.includes('already registered')) {
-            return alert('Este e-mail já está cadastrado. Tente fazer login.');
+            return showToast('Este e-mail já está cadastrado. Tente fazer login.');
         }
         // Este erro agora inclui a falha de validação ou de email
-        return alert('Erro ao cadastrar. Tente novamente.');
+        return showToast('Erro ao cadastrar. Tente novamente.');
     }
     
     // 2. Desloga o usuário e informa a pendência
@@ -382,7 +404,7 @@ async function handleLogin() {
     });
 
     if (signInError) {
-        return alert('Falha no login. Verifique e-mail e senha.');
+        return showToast('Falha no login. Verifique e-mail e senha.');
     }
 
     const userId = data.user.id;
@@ -394,12 +416,12 @@ async function handleLogin() {
         .single();
     
     if (profileError || !profileData) {
-        return alert('Seu perfil não foi encontrado. Contate o administrador. (Verifique RLS de SELECT na tabela PERFIS).');
+        return showToast('Seu perfil não foi encontrado. Contate o administrador. (Verifique RLS de SELECT na tabela PERFIS).');
     }
 
     if (profileData.status !== 'APROVADO') {
         await supabase.auth.signOut(); 
-        return alert(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
+        return showToast(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
     }
 
     const userMetadata = data.user.user_metadata || {};
@@ -508,7 +530,7 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
         .eq('id', userId);
 
     if (error) {
-        return alert('Falha ao atualizar o status. Verifique RLS de UPDATE na tabela "perfis".');
+        return showToast('Falha ao atualizar o status. Verifique RLS de UPDATE na tabela "perfis".');
     }
     
     alert(`Usuário marcado como: ${newStatus}.`);
@@ -652,7 +674,7 @@ async function addPhotoFromInput(event) {
 
 async function submitDelivery() {
     if (signaturePad.isEmpty()) {
-        return alert("Assinatura do cliente é obrigatória.");
+        return showToast("Assinatura do cliente é obrigatória.");
     }
     const pedido = document.getElementById('pedido').value.trim();
     const endereco = document.getElementById('endereco').value.trim();
@@ -661,7 +683,7 @@ async function submitDelivery() {
     const fotoFiles = photosToUpload; 
 
     if (!pedido || !endereco || !cliente || fotoFiles.length === 0) {
-        return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
+        return showToast("Todos os campos e pelo menos uma foto são obrigatórios.");
     }
 
     // 1. Inserir a Entrega PRINCIPAL, incluindo o user_id logado
@@ -680,7 +702,7 @@ async function submitDelivery() {
 
     if (dbError) {
         console.error('Erro ao registrar a entrega no banco (Principal):', dbError);
-        return alert('Erro ao registrar a entrega principal no banco.');
+        return showToast('Erro ao registrar a entrega principal no banco.');
     }
     entregaId = entregaData.id;
 
@@ -885,7 +907,7 @@ async function downloadComprovante() {
     const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
 
     if (document.getElementById('detalhes-pedido').classList.contains('hidden')) {
-        return alert('Selecione um pedido primeiro.');
+        return showToast('Selecione um pedido primeiro.');
     }
 
     document.getElementById('download-btn').style.display = 'none';
@@ -948,7 +970,7 @@ async function secureReauthenticate() {
 
 async function deleteDelivery(entregaId, numeroPedido) {
     if (currentUser.nivel !== 2) {
-        return alert("Apenas Gerentes podem excluir pedidos.");
+        return showToast("Apenas Gerentes podem excluir pedidos.");
     }
     
     // CRÍTICO: Requisito de senha antes de prosseguir
@@ -1031,7 +1053,7 @@ async function deleteDelivery(entregaId, numeroPedido) {
 // ** NOVO: Função para Excluir TODOS os Pedidos **
 async function deleteAllDeliveries() {
     if (currentUser.nivel !== 2) {
-        return alert("Apenas Gerentes podem excluir todos os pedidos.");
+        return showToast("Apenas Gerentes podem excluir todos os pedidos.");
     }
     
     // CRÍTICO: Requisito de senha antes de prosseguir
@@ -1044,7 +1066,7 @@ async function deleteAllDeliveries() {
     const confirmationText = prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO' na caixa abaixo:");
     
     if (confirmationText !== 'DELETAR TUDO') {
-        return alert('Exclusão total cancelada.');
+        return showToast('Exclusão total cancelada.');
     }
 
     // Loga a tentativa de exclusão
@@ -1062,7 +1084,7 @@ async function deleteAllDeliveries() {
 
     if (fotosDelError) {
         console.error('Erro ao excluir TODAS as fotos:', fotosDelError);
-        return alert('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
+        return showToast('Erro ao excluir todos os registros de fotos. Verifique as Políticas RLS de DELETE.');
     }
     
     // 2. Excluir todos os registros da tabela 'entregas'
@@ -1073,7 +1095,7 @@ async function deleteAllDeliveries() {
 
     if (entregaDelError) {
         console.error('Erro ao excluir TODOS os pedidos:', entregaDelError);
-        return alert('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
+        return showToast('Erro ao excluir todos os pedidos. Verifique as Políticas RLS de DELETE.');
     }
 
     alert('TODOS os pedidos foram excluídos com sucesso do banco de dados! Lembre-se de limpar o bucket "comprovantes" no Storage do Supabase se desejar remover os arquivos.');

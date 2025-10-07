@@ -332,20 +332,20 @@ async function checkUserSession() {
         showLogin();
     }
 }
+
 // Substitua esta função no seu bloco <script>:
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
     const senha = document.getElementById('reg-senha').value.trim();
-    const nivel = parseInt(document.getElementById('reg-nivel').value);
+    const nivel = parseInt(document.getElementById('reg-nivel').value); // PEGA O VALOR 1 OU 2 DO SELECT
     
     if (!nome || !email || senha.length < 6) {
         return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
     }
     
-    // 1. Cadastrar o usuário no Supabase Auth (logando-o)
-    // REMOVEMOS O CÓDIGO PROBLEMÁTICO DE PAUSA E INSERÇÃO MANUAL
-    const { error: signUpError } = await supabase.auth.signUp({
+    // 1. Cadastrar o usuário (logando-o)
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: senha,
         options: {
@@ -361,12 +361,36 @@ async function handleRegister() {
         return alert('Erro ao cadastrar. Tente novamente.');
     }
     
-    // 2. Apenas desloga e avisa (o gatilho cuida da inserção PENDENTE)
+    // 2. PAUSA CRÍTICA: Aguardar 1 segundo para garantir que o navegador salve o token.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 3. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated' e com token salvo)
+    if (authData.user) {
+        const { error: profileInsertError } = await supabase
+            .from(PERFIS_TABLE)
+            .insert([{
+                id: authData.user.id,
+                email: email,
+                // CRÍTICO: SALVA O VALOR ESCOLHIDO (1 ou 2)
+                nivel_acesso: nivel, 
+                status: 'PENDENTE',
+                nome: nome
+            }]);
+        
+        if (profileInsertError) {
+             console.error('Erro de inserção direta do perfil:', profileInsertError);
+             alert('Erro crítico ao salvar seu perfil PENDENTE. Contate o administrador.');
+             await supabase.auth.signOut();
+             return;
+        }
+    }
+
+    // 4. Desloga o usuário e informa a pendência
     await supabase.auth.signOut();
     alert("Cadastro enviado com sucesso! Sua conta está PENDENTE de aprovação do administrador.");
     showLogin(); 
 }
-
+        
 
 async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
@@ -1084,5 +1108,6 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+
 
 

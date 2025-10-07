@@ -246,31 +246,32 @@ function showConfigSubTab(tabName) {
     if (tabName === 'logs') loadExclusaoLogs(); 
 }
 
-// MODIFICADA: Navegação do Gerente (CORRIGIDA A REFERÊNCIA DO BOTÃO 'CONFIG')
+// MODIFICADA: Navegação do Gerente (Corrigida a referência dos IDs e simplificada a transição)
 function showGerenteTab(tabName) {
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
-    // Esconde as duas abas de conteúdo
+    // 1. Reseta o layout: esconde tudo e desativa os botões
     document.getElementById('tab-aprovacao-content').classList.add('hidden');
     document.getElementById('tab-historico-content').classList.add('hidden');
     
-    // Reseta as cores dos botões de NÍVEL 1
     document.getElementById('config-btn').style.backgroundColor = inactiveColor;
     document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
 
 
-    // Lógica para ativar o conteúdo e o botão
+    // 2. Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
         document.getElementById('tab-historico-content').classList.remove('hidden');
         document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
         fetchDeliveries();
-    } else if (tabName === 'config') {
-        // Ao clicar em Configurações, abre o sub-menu de Aprovação
+    } else if (tabName === 'aprovacao' || tabName === 'config') {
+        // Usa 'tab-aprovacao-content' como o conteúdo de Configurações
         document.getElementById('tab-aprovacao-content').classList.remove('hidden');
         document.getElementById('config-btn').style.backgroundColor = activeColor;
-        // Chama o submenu e carrega o painel de pendentes
-        showConfigSubTab('aprovacao'); 
+        
+        // Ao clicar em Configurações, carrega a lista de pendentes
+        loadAprovacaoPanel();
+        updateAprovacaoBadge();
     }
 }
 
@@ -1043,4 +1044,5 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+
 

@@ -164,7 +164,7 @@
     window.addEventListener('resize', resizeCanvas);
 
     // ======================================================================
-    //  INÍCIO DAS FUNÇÕES ORIGINAIS (COMPLETAS E CORRIGIDAS)
+    //  INÍCIO DAS FUNÇÕES ORIGINAIS (COMPLETAS E VERIFICADAS)
     // ======================================================================
 
     // Funções de UI
@@ -184,14 +184,20 @@
     }
 
     function showGerenteTab(tabName) {
+        const activeColor = '#007bff';
+        const inactiveColor = '#0056b3';
         document.getElementById('tab-historico-content').classList.add('hidden');
-        document.getElementById('tab-config-content').classList.add('hidden');
+        document.getElementById('tab-config-content').classList.add('hidden'); 
+        document.getElementById('config-btn').style.backgroundColor = inactiveColor;
+        document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
         if (tabName === 'historico') {
             document.getElementById('tab-historico-content').classList.remove('hidden');
+            document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
             fetchDeliveries();
         } else if (tabName === 'config') {
-            document.getElementById('tab-config-content').classList.remove('hidden');
-            showConfigSubTab('aprovacao');
+            document.getElementById('tab-config-content').classList.remove('hidden'); 
+            document.getElementById('config-btn').style.backgroundColor = activeColor;
+            showConfigSubTab('aprovacao'); 
         }
     }
 
@@ -234,7 +240,7 @@
         const email = document.getElementById('reg-email').value.trim();
         const senha = document.getElementById('reg-senha').value.trim();
         const nivel = parseInt(document.getElementById('reg-nivel').value);
-        if (!nome || !email || senha.length < 6) return alert("Preencha todos os campos corretamente.");
+        if (!nome || !email || senha.length < 6) return alert("Preencha todos os campos e use uma senha de no mínimo 6 caracteres.");
         const { error } = await supabase.auth.signUp({ email, password: senha, options: { data: { nome, nivel } } });
         if (error) return alert(error.message);
         await supabase.auth.signOut();
@@ -253,6 +259,8 @@
     async function handleLogout() {
         await supabase.auth.signOut();
         currentUser = null;
+        photosToUpload = []; 
+        document.getElementById('photos-preview').innerHTML = ''; 
         await checkUserSession();
     }
 
@@ -302,7 +310,7 @@
             photoContainer.style = 'position: relative;';
             photoContainer.innerHTML = `
                 <img src="${imgUrl}" style="max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;">
-                <button style="position: absolute; top: -5px; right: -5px; background-color: red; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;">X</button>
+                <button type="button" style="position: absolute; top: -5px; right: -5px; background-color: red; color: white; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;">X</button>
             `;
             photoContainer.querySelector('button').onclick = () => {
                 const index = photosToUpload.indexOf(compressedFile);
@@ -322,18 +330,220 @@
     }
 
     // Funções do Painel de Gerente
-    async function updateAprovacaoBadge() { /* ...código original aqui... */ }
-    async function loadAprovacaoPanel() { /* ...código original aqui... */ }
-    async function aproveOrReject(userId, newStatus) { /* ...código original aqui... */ }
-    async function loadExclusaoLogs() { /* ...código original aqui... */ }
-    async function fetchDeliveries(searchQuery = '') { /* ...código original aqui... */ }
-    function renderDeliveryList(deliveries) { /* ...código original aqui... */ }
-    function searchDeliveries() { /* ...código original aqui... */ }
-    async function showDeliveryDetails(entregaId, numeroPedido) { /* ...código original aqui... */ }
-    async function downloadComprovante() { /* ...código original aqui... */ }
-    async function secureReauthenticate() { /* ...código original aqui... */ }
-    async function deleteDelivery(entregaId, numeroPedido) { /* ...código original aqui... */ }
-    async function deleteAllDeliveries() { /* ...código original aqui... */ }
+    async function updateAprovacaoBadge() {
+        const { count, error } = await supabase.from(PERFIS_TABLE).select('id', { count: 'exact', head: true }).eq('status', 'PENDENTE');
+        const badgeElement = document.getElementById('aprovacao-badge');
+        if (error || count === 0) {
+            badgeElement.classList.add('hidden');
+        } else {
+            badgeElement.textContent = count;
+            badgeElement.classList.remove('hidden');
+        }
+    }
+
+    async function loadAprovacaoPanel() {
+        const listDiv = document.getElementById('aprovacao-list');
+        listDiv.innerHTML = 'Carregando solicitações...';
+        const { data, error } = await supabase.from(PERFIS_TABLE).select('id, email, nivel_acesso, created_at').eq('status', 'PENDENTE').order('created_at', { ascending: true });
+        if (error) {
+            listDiv.innerHTML = 'Erro ao carregar lista.';
+            return;
+        }
+        if (data.length === 0) {
+            listDiv.innerHTML = '<p>Nenhuma solicitação de usuário pendente.</p>';
+            return;
+        }
+        listDiv.innerHTML = '';
+        data.forEach(profile => {
+            const nivelText = profile.nivel_acesso == 2 ? 'Gerente' : 'Entregador';
+            const card = document.createElement('div');
+            card.className = 'aprovacao-card';
+            card.innerHTML = `
+                <p><strong>E-mail:</strong> ${profile.email}</p>
+                <p><strong>Cargo Solicitado:</strong> ${nivelText}</p>
+                <button onclick="aproveOrReject('${profile.id}', 'APROVADO')">Aprovar e Ativar</button>
+                <button onclick="aproveOrReject('${profile.id}', 'REJEITADO')" style="background-color: #6c757d;">Rejeitar</button>
+            `;
+            listDiv.appendChild(card);
+        });
+    }
+
+    async function aproveOrReject(userId, newStatus) {
+        if (!confirm(`Confirmar a ação: ${newStatus} para o usuário?`)) return;
+        const { error } = await supabase.from(PERFIS_TABLE).update({ status: newStatus }).eq('id', userId);
+        if (error) return alert('Falha ao atualizar o status.');
+        alert(`Usuário marcado como: ${newStatus}.`);
+        loadAprovacaoPanel();
+        updateAprovacaoBadge();
+    }
+
+    async function loadExclusaoLogs() {
+        const listDiv = document.getElementById('log-exclusoes-list');
+        listDiv.innerHTML = 'Carregando logs...';
+        const { data, error } = await supabase.from(LOG_EXCLUSOES_TABLE).select(`created_at, acao, detalhes, perfis!inner(email)`).order('created_at', { ascending: false });
+        if (error) {
+            listDiv.innerHTML = 'Erro ao carregar logs.';
+            return;
+        }
+        let html = '<table style="width: 100%; border-collapse: collapse;"><tr><th style="border: 1px solid #ddd; padding: 8px;">Data/Hora</th><th style="border: 1px solid #ddd; padding: 8px;">Ação</th><th style="border: 1px solid #ddd; padding: 8px;">Administrador</th></tr>';
+        data.forEach(log => {
+            html += `<tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">${new Date(log.created_at).toLocaleString('pt-BR')}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido'}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${log.perfis.email.split('@')[0]}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        listDiv.innerHTML = html;
+    }
+
+    async function fetchDeliveries(searchQuery = '') {
+        const listDiv = document.getElementById('historico-list');
+        listDiv.innerHTML = 'Carregando pedidos...';
+        let query = supabase.from(ENTREGAS_TABLE).select(`id, numero_pedido, nome_cliente, created_at, perfis!inner(email, nome)`).order('created_at', { ascending: false });
+        if (searchQuery) {
+            query = query.ilike('numero_pedido', `%${searchQuery}%`);
+        }
+        const { data, error } = await query;
+        if (error) {
+            listDiv.innerHTML = 'Erro ao carregar pedidos.';
+            return;
+        }
+        renderDeliveryList(data);
+    }
+
+    function renderDeliveryList(deliveries) {
+        const listDiv = document.getElementById('historico-list');
+        listDiv.innerHTML = '';
+        if (deliveries.length === 0) {
+            listDiv.innerHTML = `<p>Nenhum pedido encontrado.</p>`;
+            return;
+        }
+        deliveries.forEach(item => {
+            const entregadorNome = item.perfis.nome || item.perfis.email.split('@')[0];
+            const card = document.createElement('div');
+            card.className = 'pedido-card';
+            card.innerHTML = `
+                <div onclick="showDeliveryDetails('${item.id}', '${item.numero_pedido}')" style="flex-grow: 1; margin-right: 10px;">
+                    <strong>Pedido N°: ${item.numero_pedido}</strong> - ${item.nome_cliente}
+                    <span style="display: block; font-size: 0.9em; color: #6c757d;">Entregador: ${entregadorNome}</span>
+                    <span style="float: right; color: #666; font-size: 0.9em;">${new Date(item.created_at).toLocaleString('pt-BR')}</span>
+                </div>
+                <button onclick="event.stopPropagation(); deleteDelivery('${item.id}', '${item.numero_pedido}')" class="delete-btn">Excluir</button>
+            `;
+            listDiv.appendChild(card);
+        });
+    }
+
+    function searchDeliveries() {
+        const query = document.getElementById('search-input').value.trim();
+        fetchDeliveries(query);
+    }
+
+    async function showDeliveryDetails(entregaId, numeroPedido) {
+        const detalhesDiv = document.getElementById('detalhes-pedido');
+        const conteudoDiv = document.getElementById('detalhes-conteudo');
+        document.getElementById('pedido-numero-detalhe').textContent = numeroPedido;
+        detalhesDiv.classList.remove('hidden');
+        conteudoDiv.innerHTML = 'Carregando detalhes...';
+        const { data: entregaData, error: entregaError } = await supabase.from(ENTREGAS_TABLE).select('*').eq('id', entregaId).single();
+        const { data: fotosData, error: fotosError } = await supabase.from(FOTOS_TABLE).select('url').eq('entrega_id', entregaId);
+        if (entregaError || fotosError) {
+            conteudoDiv.innerHTML = '<p style="color: red;">Falha ao carregar os detalhes do pedido.</p>';
+            return;
+        }
+        let fotosHtml = '<h4>Fotos:</h4><div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">';
+        if (fotosData.length > 0) {
+            fotosData.forEach(foto => {
+                fotosHtml += `<img src="${foto.url}" style="max-width: 150px; max-height: 150px; cursor: pointer;" onclick="window.open('${foto.url}', '_blank')">`;
+            });
+        } else {
+            fotosHtml += '<p>Nenhuma foto anexada.</p>';
+        }
+        fotosHtml += '</div>';
+        conteudoDiv.innerHTML = `
+            <p><strong>Endereço:</strong> ${entregaData.endereco}</p>
+            <p><strong>Recebedor:</strong> ${entregaData.nome_cliente}</p>
+            <p><strong>Registro:</strong> ${new Date(entregaData.created_at).toLocaleString('pt-BR')}</p>
+            ${fotosHtml}
+            <h4>Assinatura:</h4>
+            <div style="border: 1px solid #ccc; background-color: white; text-align: center;"><img src="${entregaData.assinatura_base64}" style="max-width: 100%; height: auto;"></div>
+        `;
+    }
+
+    async function downloadComprovante() {
+        const elemento = document.getElementById('detalhes-conteudo');
+        const pedidoNumero = document.getElementById('pedido-numero-detalhe').textContent;
+        if (document.getElementById('detalhes-pedido').classList.contains('hidden')) return alert('Selecione um pedido.');
+        document.getElementById('download-btn').style.display = 'none';
+        try {
+            const canvas = await html2canvas(elemento, { scale: 2, useCORS: true });
+            const imgData = canvas.toDataURL('image/jpeg');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Comprovante_Pedido_${pedidoNumero}.pdf`);
+        } catch (error) {
+            console.error('Erro ao gerar PDF:', error);
+            alert('Houve um erro ao gerar o comprovante.');
+        } finally {
+            document.getElementById('download-btn').style.display = 'block';
+        }
+    }
+
+    async function secureReauthenticate() {
+        if (!currentUser || currentUser.nivel !== 2) return false;
+        const senha = prompt(`Confirmação de Segurança: Digite sua senha atual para prosseguir:`);
+        if (!senha) return false;
+        const { error } = await supabase.auth.signInWithPassword({ email: currentUser.email, password: senha });
+        if (error) {
+            alert("Senha incorreta. Operação cancelada.");
+            return false;
+        }
+        return true;
+    }
+
+    async function deleteDelivery(entregaId, numeroPedido) {
+        if (currentUser.nivel !== 2) return alert("Apenas Gerentes podem excluir.");
+        const authenticated = await secureReauthenticate();
+        if (!authenticated) return;
+        if (!confirm(`Tem certeza que deseja EXCLUIR o pedido N° ${numeroPedido}? Esta ação é IRREVERSÍVEL.`)) return;
+
+        await supabase.from(LOG_EXCLUSOES_TABLE).insert([{ admin_user_id: currentUser.id, acao: 'DELETE_SINGLE', detalhes: `Exclusão do Pedido ${numeroPedido}` }]);
+        
+        const { data: fotos, error: fotosFetchError } = await supabase.from(FOTOS_TABLE).select('url').eq('entrega_id', entregaId);
+        if (fotosFetchError) return alert('Erro ao buscar fotos para exclusão.');
+
+        const filesToDelete = fotos.map(f => f.url.split(`${BUCKET_NAME}/`)[1]).filter(p => p);
+        if (filesToDelete.length > 0) {
+            await supabase.storage.from(BUCKET_NAME).remove(filesToDelete);
+        }
+        
+        await supabase.from(FOTOS_TABLE).delete().eq('entrega_id', entregaId);
+        await supabase.from(ENTREGAS_TABLE).delete().eq('id', entregaId);
+        
+        alert(`Pedido N° ${numeroPedido} excluído com sucesso!`);
+        fetchDeliveries(document.getElementById('search-input').value.trim());
+        hideDeliveryDetails();
+    }
+
+    async function deleteAllDeliveries() {
+        if (currentUser.nivel !== 2) return alert("Apenas Gerentes podem excluir.");
+        const authenticated = await secureReauthenticate();
+        if (!authenticated) return;
+        if (prompt("Para confirmar a exclusão TOTAL, digite 'DELETAR TUDO':") !== 'DELETAR TUDO') return alert('Exclusão cancelada.');
+
+        await supabase.from(LOG_EXCLUSOES_TABLE).insert([{ admin_user_id: currentUser.id, acao: 'DELETE_ALL', detalhes: 'Exclusão total' }]);
+        
+        await supabase.from(FOTOS_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from(ENTREGAS_TABLE).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        
+        alert('TODOS os pedidos foram excluídos! Limpe o bucket "comprovantes" no Storage do Supabase para remover os arquivos.');
+        fetchDeliveries();
+        hideDeliveryDetails();
+    }
 
     // ======================================================================
     //  FIM DAS FUNÇÕES ORIGINAIS
@@ -359,6 +569,7 @@
                 alert(`Entrega ${entregaData.numero_pedido} registrada com sucesso!`);
                 limparFormulario();
             } catch (error) {
+                console.warn("Falha ao enviar. Salvando localmente para tentar depois.", error);
                 await salvarEntregaLocalmente(entregaData);
             }
         } else {

@@ -176,8 +176,8 @@
 
     <script>
 // ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
-const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; // ATUALIZE ESTA LINHA
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; // ATUALIZE ESTA LINHA
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
@@ -245,29 +245,36 @@ function showConfigSubTab(tabName) {
     if (tabName === 'logs') loadExclusaoLogs(); 
 }
 
-// Navegação do Gerente (Corrigida a referência dos IDs e simplificada a transição)
+// Navegação do Gerente (VERSÃO ROBUSTA E FINAL)
 function showGerenteTab(tabName) {
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
-    // 1. Reseta o layout: esconde tudo e desativa os botões
-    document.getElementById('tab-aprovacao-content').classList.add('hidden');
-    document.getElementById('tab-historico-content').classList.add('hidden');
-    document.getElementById('tab-config-content').classList.add('hidden'); // CRÍTICO: ESCONDE A ABA CONFIG
+    // Referências dos botões e conteúdos
+    const aproConteudo = document.getElementById('tab-aprovacao-content');
+    const histConteudo = document.getElementById('tab-historico-content');
+    const configBtn = document.getElementById('config-btn');
+    const histBtn = document.getElementById('tab-historico-btn');
+    const configContent = document.getElementById('tab-config-content'); // O contêiner de sub-abas
 
-    document.getElementById('config-btn').style.backgroundColor = inactiveColor;
-    document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
+    // 1. Reseta o layout: esconde tudo e desativa os botões
+    if (aproConteudo) aproConteudo.classList.add('hidden');
+    if (histConteudo) histConteudo.classList.add('hidden');
+    if (configContent) configContent.classList.add('hidden'); // CRÍTICO: Esconde a div Configurações
+
+    if (configBtn) configBtn.style.backgroundColor = inactiveColor;
+    if (histBtn) histBtn.style.backgroundColor = inactiveColor;
 
 
     // 2. Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
-        document.getElementById('tab-historico-content').classList.remove('hidden');
-        document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
+        if (histConteudo) histConteudo.classList.remove('hidden');
+        if (histBtn) histBtn.style.backgroundColor = activeColor;
         fetchDeliveries();
     } else if (tabName === 'aprovacao' || tabName === 'config') {
         // Ao clicar em Configurações, abre a ABA CONFIG
-        document.getElementById('tab-config-content').classList.remove('hidden'); 
-        document.getElementById('config-btn').style.backgroundColor = activeColor;
+        if (configContent) configContent.classList.remove('hidden'); 
+        if (configBtn) configBtn.style.backgroundColor = activeColor;
         
         // E dentro dela, carrega o submenu 'aprovacao' por padrão
         showConfigSubTab('aprovacao'); 
@@ -307,7 +314,7 @@ async function checkUserSession() {
         } else if (currentUser.nivel === 2) {
             document.getElementById('gerente-area').classList.remove('hidden');
             showGerenteTab('historico'); // Gerente começa no Histórico
-            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
         }
     } else {
         showLogin();
@@ -421,6 +428,9 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
+    if (unsubscribeRealtime) {
+        unsubscribeRealtime.unsubscribe(); 
+    }
     await supabase.auth.signOut();
     currentUser = null;
     showLogin();
@@ -515,7 +525,6 @@ async function loadExclusaoLogs() {
     const listDiv = document.getElementById('log-exclusoes-list');
     listDiv.innerHTML = 'Carregando logs...';
     
-    // CRÍTICO: Join com perfis para pegar o e-mail de quem excluiu
     const { data, error } = await supabase
         .from(LOG_EXCLUSOES_TABLE)
         .select(`
@@ -1141,7 +1150,7 @@ async function submitDelivery() {
         return alert("Todos os campos e pelo menos uma foto são obrigatórios.");
     }
 
-    // 1. Inserir a Entrega PRINCIPAL, incluindo o user_id logado
+    // 1. Inserir a Entrega PRINCIPAL (para obter o ID)
     let entregaId;
     const { data: entregaData, error: dbError } = await supabase
         .from(ENTREGAS_TABLE) 

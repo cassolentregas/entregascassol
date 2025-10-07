@@ -247,32 +247,38 @@ function showConfigSubTab(tabName) {
     if (tabName === 'logs') loadExclusaoLogs(); 
 }
 
-// Navegação do Gerente (Corrigida a referência dos IDs e simplificada a transição)
+// MODIFICADA: Navegação do Gerente (COM CHECAGEM DE NULIDADE PARA EVITAR TRAVAMENTO)
 function showGerenteTab(tabName) {
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
-    // 1. Reseta o layout: esconde tudo e desativa os botões
-    document.getElementById('tab-aprovacao-content').classList.add('hidden');
-    document.getElementById('tab-historico-content').classList.add('hidden');
-    document.getElementById('tab-config-content').classList.add('hidden'); // CRÍTICO: ESCONDER A ABA CONFIG
-
-    document.getElementById('config-btn').style.backgroundColor = inactiveColor;
-    document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
+    // Referências dos Elementos
+    const aproConteudo = document.getElementById('tab-aprovacao-content');
+    const histConteudo = document.getElementById('tab-historico-content');
+    const configBtn = document.getElementById('config-btn');
+    const histBtn = document.getElementById('tab-historico-btn');
+    
+    // 1. Reseta o layout (Checa se o elemento existe antes de manipulá-lo)
+    if (aproConteudo) aproConteudo.classList.add('hidden');
+    if (histConteudo) histConteudo.classList.add('hidden');
+    
+    if (configBtn) configBtn.style.backgroundColor = inactiveColor;
+    if (histBtn) histBtn.style.backgroundColor = inactiveColor;
 
 
     // 2. Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
-        document.getElementById('tab-historico-content').classList.remove('hidden');
-        document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
+        if (histConteudo) histConteudo.classList.remove('hidden');
+        if (histBtn) histBtn.style.backgroundColor = activeColor;
         fetchDeliveries();
     } else if (tabName === 'aprovacao' || tabName === 'config') {
-        // Ao clicar em Configurações, abre a ABA CONFIG
-        document.getElementById('tab-config-content').classList.remove('hidden'); 
-        document.getElementById('config-btn').style.backgroundColor = activeColor;
+        // Ao clicar em Configurações, abre a ABA de Aprovação
+        if (aproConteudo) aproConteudo.classList.remove('hidden');
+        if (configBtn) configBtn.style.backgroundColor = activeColor;
         
-        // E dentro dela, carrega o submenu 'aprovacao' por padrão
-        showConfigSubTab('aprovacao'); 
+        // Dispara o carregamento do painel
+        loadAprovacaoPanel();
+        updateAprovacaoBadge();
     }
 }
 
@@ -1046,3 +1052,4 @@ document.getElementById('single-photo-input').addEventListener('change', addPhot
 </script>
 </body>
 </html>
+

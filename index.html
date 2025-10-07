@@ -64,6 +64,28 @@
         .toast.info { background-color: #17a2b8; }
         @keyframes fadeIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
         @keyframes fadeOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+        button:disabled {
+            background-color: #5a6268; /* Um cinza para indicar inatividade */
+            cursor: not-allowed;      /* Muda o cursor do mouse */
+            opacity: 0.8;             /* Deixa um pouco mais opaco */
+        }
+
+/* Bônus: Estilo para um ícone de "spinner" giratório */
+        .spinner {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.15em;
+            border: 2px solid #fff;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border .75s linear infinite;
+            margin-right: 0.5em;
+        }
+
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -397,51 +419,72 @@ async function handleRegister() {
 async function handleLogin() {
     const email = document.getElementById('login-email').value.trim();
     const senha = document.getElementById('login-senha').value.trim();
+    const botaoLogin = document.querySelector('#login-area button');
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: senha,
-    });
+    // Desabilita o botão e mostra o estado de carregamento
+    botaoLogin.disabled = true;
+    botaoLogin.innerHTML = `<span class="spinner"></span> Autenticando...`;
 
-    if (signInError) {
-        return showToast('Falha no login. Verifique e-mail e senha.');
-    }
+    try {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: senha,
+        });
 
-    const userId = data.user.id;
+        if (signInError) {
+            // Se houver erro, mostra a notificação e encerra a função aqui.
+            // O bloco 'finally' vai restaurar o botão.
+            return showToast('Falha no login. Verifique e-mail e senha.', 'error');
+        }
 
-    const { data: profileData, error: profileError } = await supabase
-        .from(PERFIS_TABLE)
-        .select('status, nivel_acesso, email, nome') // Buscando o nome
-        .eq('id', userId)
-        .single();
-    
-    if (profileError || !profileData) {
-        return showToast('Seu perfil não foi encontrado. Contate o administrador. (Verifique RLS de SELECT na tabela PERFIS).');
-    }
+        const userId = data.user.id;
 
-    if (profileData.status !== 'APROVADO') {
-        await supabase.auth.signOut(); 
-        return showToast(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação do administrador.`);
-    }
+        const { data: profileData, error: profileError } = await supabase
+            .from(PERFIS_TABLE)
+            .select('status, nivel_acesso, email, nome')
+            .eq('id', userId)
+            .single();
+        
+        if (profileError || !profileData) {
+            await supabase.auth.signOut();
+            return showToast('Seu perfil não foi encontrado. Contate o administrador.', 'error');
+        }
 
-    const userMetadata = data.user.user_metadata || {};
-    // Prioriza o nome da tabela Perfis, depois o nome dos metadados, depois o email
-    const nomeUsuario = profileData.nome || userMetadata.nome || profileData.email.split('@')[0];
+        if (profileData.status !== 'APROVADO') {
+            await supabase.auth.signOut(); 
+            return showToast(`Sua conta está no status: ${profileData.status}. Aguarde a aprovação.`, 'info');
+        }
 
-    currentUser = { id: userId, nivel: profileData.nivel_acesso, email: profileData.email, nome: nomeUsuario };
-    
-    document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
-    document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+        // --- INÍCIO DO SEU CÓDIGO QUE ESTAVA FALTANDO ---
+        const userMetadata = data.user.user_metadata || {};
+        // Prioriza o nome da tabela Perfis, depois o nome dos metadados, depois o email
+        const nomeUsuario = profileData.nome || userMetadata.nome || profileData.email.split('@')[0];
 
-    document.getElementById('login-area').classList.add('hidden');
-    document.getElementById('cadastro-area').classList.add('hidden');
+        currentUser = { id: userId, nivel: profileData.nivel_acesso, email: profileData.email, nome: nomeUsuario };
+        
+        document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
+        document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
 
-    if (currentUser.nivel === 1) {
-        document.getElementById('entregador-area').classList.remove('hidden');
-    } else if (currentUser.nivel === 2) {
-        document.getElementById('gerente-area').classList.remove('hidden');
-        showGerenteTab('historico'); 
-        updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
+        document.getElementById('login-area').classList.add('hidden');
+        document.getElementById('cadastro-area').classList.add('hidden');
+
+        if (currentUser.nivel === 1) {
+            document.getElementById('entregador-area').classList.remove('hidden');
+        } else if (currentUser.nivel === 2) {
+            document.getElementById('gerente-area').classList.remove('hidden');
+            showGerenteTab('historico'); 
+            updateAprovacaoBadge(); // CHAMA A ATUALIZAÇÃO DO BADGE APÓS O LOGIN
+        }
+        // --- FIM DO SEU CÓDIGO QUE ESTAVA FALTANDO ---
+
+    } catch (error) {
+        // Este bloco 'catch' pega erros inesperados que não foram tratados acima
+        console.error("Erro inesperado no login:", error);
+        showToast("Ocorreu um erro inesperado. Tente novamente.", "error");
+    } finally {
+        // SEMPRE executa este bloco para garantir que o botão seja restaurado
+        botaoLogin.disabled = false;
+        botaoLogin.innerHTML = `Entrar`;
     }
 }
 

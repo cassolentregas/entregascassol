@@ -32,28 +32,6 @@
         .delete-btn:hover { background-color: #c82333; }
         .aprovacao-card { border: 1px solid #ffc107; padding: 10px; margin-bottom: 10px; background-color: #fff3cd; }
         .aprovacao-card button { width: auto; margin: 5px 5px 0 0; }
-        
-        /* ESTILOS PARA O SUBMENU */
-        .sub-menu-bar { margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-        .sub-menu-bar button { width: auto; padding: 8px 12px; margin-bottom: 0; background-color: #495057; }
-        .sub-menu-bar button.active { background-color: #007bff; }
-        
-        /* BADGE DE NOTIFICAÇÃO */
-        #config-btn { position: relative; }
-        .notification-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background-color: red;
-            color: white;
-            border-radius: 50%;
-            padding: 2px 6px;
-            font-size: 10px;
-            font-weight: bold;
-            line-height: 1;
-            min-width: 15px;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -118,7 +96,7 @@
 
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                 <button id="tab-historico-btn" onclick="showGerenteTab('historico')" style="width: auto; background-color: #007bff;">Histórico</button>
-                <button id="config-btn" onclick="showGerenteTab('config')" style="width: auto; background-color: #0056b3;">
+                <button id="config-btn" onclick="showGerenteTab('aprovacao')" style="width: auto; background-color: #0056b3;">
                     Configurações 
                     <span id="aprovacao-badge" class="notification-badge hidden"></span>
                 </button>
@@ -143,29 +121,11 @@
                 </div>
             </div>
 
-            <div id="tab-config-content" class="tab-content hidden">
-                <h3>Configurações e Administração</h3>
-                
-                <div class="sub-menu-bar">
-                    <button id="sub-tab-aprovacao-btn" class="active" onclick="showConfigSubTab('aprovacao')">Aprovação de Usuários</button>
-                    <button id="sub-tab-logs-btn" onclick="showConfigSubTab('logs')">Log de Exclusão</button>
-                    </div>
-
-                <div id="sub-tab-aprovacao-content" class="sub-tab-content">
-                    <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                        <h3>Aprovação de Usuários Pendentes</h3>
-                        <div id="aprovacao-list">
-                            <p>Carregando solicitações...</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="sub-tab-logs-content" class="sub-tab-content hidden">
-                    <div style="border: 1px solid #ccc; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
-                        <h3>Registro de Exclusões</h3>
-                        <div id="log-exclusoes-list">
-                            <p>Carregando logs...</p>
-                        </div>
+            <div id="tab-aprovacao-content" class="tab-content hidden">
+                <div style="border: 2px solid #ffc107; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                    <h3>Aprovação de Usuários Pendentes</h3>
+                    <div id="aprovacao-list">
+                        <p>Carregando solicitações...</p>
                     </div>
                 </div>
             </div>
@@ -176,19 +136,22 @@
 
     <script>
 // ** 1. Configuração do Supabase (ATUALIZE AS CHAVES DO NOVO PROJETO) **
-const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; 
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; 
+const SUPABASE_URL = 'https://sdwmjiohhkmfdbvypshg.supabase.co'; // ATUALIZE ESTA LINHA
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkd21qaW9oaGttZmRidnlwc2hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3OTU2MjgsImV4cCI6MjA3NTM3MTYyOH0.IPBHlwiidD-w710Tk0SAA_zfEwR8jlX_adoICRSkqBY'; // ATUALIZE ESTA LINHA
 
 const BUCKET_NAME = 'comprovantes';
 const ENTREGAS_TABLE = 'entregas'; 
 const FOTOS_TABLE = 'fotos_comprovantes'; 
 const PERFIS_TABLE = 'perfis'; 
 const LOG_EXCLUSOES_TABLE = 'log_exclusoes'; 
+const SECURITY_PIN = "123456"; // SENHA DE EXCLUSÃO FIXA (REMOVIDA LOGICA AGORA)
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null; 
 let photosToUpload = []; 
+let currentChatPartnerId = null; 
+let unsubscribeRealtime = null; 
 
 // ** 2. Configuração da Assinatura e Canvas **
 const canvas = document.getElementById('signature-pad');
@@ -198,8 +161,6 @@ function resizeCanvas() {
     canvas.height = canvas.offsetHeight;
     signaturePad.clear();
 }
-window.addEventListener('resize', resizeCanvas);
-
 
 // ** CHAVE PARA PERSISTÊNCIA DE LOGIN E CARREGAMENTO **
 window.onload = function() {
@@ -207,6 +168,7 @@ window.onload = function() {
     checkUserSession(); 
     document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
 };
+window.addEventListener('resize', resizeCanvas);
 
 
 // Funções Auxiliares de UI
@@ -219,50 +181,31 @@ function showLogin() {
     document.getElementById('cadastro-area').classList.add('hidden');
 }
 
-// Lógica para navegação do Submenu de Configurações
-function showConfigSubTab(tabName) {
-    const subTabs = ['aprovacao', 'logs'];
-    const activeClass = 'active';
-
-    subTabs.forEach(tab => {
-        const contentDiv = document.getElementById(`sub-tab-${tab}-content`);
-        const button = document.getElementById(`sub-tab-${tab}-btn`);
-        
-        contentDiv.classList.add('hidden');
-        button.classList.remove(activeClass);
-    });
-
-    const activeContentDiv = document.getElementById(`sub-tab-${tabName}-content`);
-    const activeButton = document.getElementById(`sub-tab-${tabName}-btn`);
-
-    activeContentDiv.classList.remove('hidden');
-    activeButton.classList.add(activeClass);
-
-    // Dispara carregamentos específicos
-    if (tabName === 'aprovacao') loadAprovacaoPanel();
-    if (tabName === 'logs') loadExclusaoLogs(); // Nova função para carregar logs
-}
-
-
-// Navegação do Gerente (MODIFICADA para abrir o submenu)
+// Navegação do Gerente
 function showGerenteTab(tabName) {
-    const tabs = ['config', 'historico'];
+    const tabs = ['aprovacao', 'historico'];
     const activeColor = '#007bff';
     const inactiveColor = '#0056b3';
 
+    // Desativa todas as abas de conteúdo
     tabs.forEach(tab => {
         document.getElementById(`tab-${tab}-content`).classList.add('hidden');
-        document.getElementById(`${tab}-btn`).style.backgroundColor = inactiveColor;
     });
+    
+    // Desativa todos os botões (Configurações e Histórico)
+    document.getElementById('config-btn').style.backgroundColor = inactiveColor;
+    document.getElementById('tab-historico-btn').style.backgroundColor = inactiveColor;
 
-    document.getElementById(`tab-${tabName}-content`).classList.remove('hidden');
-    document.getElementById(`${tabName}-btn`).style.backgroundColor = activeColor;
 
+    // Lógica para ativar o conteúdo e o botão
     if (tabName === 'historico') {
+        document.getElementById(`tab-historico-content`).classList.remove('hidden');
+        document.getElementById('tab-historico-btn').style.backgroundColor = activeColor;
         fetchDeliveries();
-    } else if (tabName === 'config') {
-        // Ao clicar em Configurações, abre a sub-aba 'aprovacao' por padrão
-        showConfigSubTab('aprovacao'); 
+    } else if (tabName === 'aprovacao') {
+        document.getElementById(`tab-aprovacao-content`).classList.remove('hidden');
+        document.getElementById('config-btn').style.backgroundColor = activeColor;
+        loadAprovacaoPanel(); // Carrega o painel de pendentes
     }
 }
 
@@ -294,7 +237,6 @@ async function checkUserSession() {
         document.getElementById('entregador-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
         document.getElementById('gerente-user-name').textContent = `Bem-vindo(a), ${currentUser.nome}.`;
 
-
         if (currentUser.nivel === 1) {
             document.getElementById('entregador-area').classList.remove('hidden');
         } else if (currentUser.nivel === 2) {
@@ -307,6 +249,7 @@ async function checkUserSession() {
     }
 }
 
+// ** VERSÃO CORRIGIDA QUE INSERE O PERFIL PENDENTE **
 async function handleRegister() {
     const nome = document.getElementById('reg-nome').value.trim();
     const email = document.getElementById('reg-email').value.trim();
@@ -337,7 +280,7 @@ async function handleRegister() {
     // 2. PAUSA CRÍTICA: Aguardar 1 segundo para garantir que o navegador salve o token.
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // 3. INSERÇÃO DO PERFIL (Ocorre no contexto 'authenticated' e com token salvo)
+    // 3. INSERÇÃO DO PERFIL (Ocorre agora no contexto 'authenticated' e com token salvo)
     if (authData.user) {
         const { error: profileInsertError } = await supabase
             .from(PERFIS_TABLE)
@@ -425,7 +368,7 @@ async function handleLogout() {
     document.getElementById('photos-preview').innerHTML = ''; 
 }
 
-// ** 4. Lógica do Painel de Aprovação e Gestão de Usuários (Gerente/Nível 2) **
+// ** 4. Lógica do Painel de Aprovação (Gerente/Nível 2) **
 
 // NOVO: Função para contar e atualizar o badge
 async function updateAprovacaoBadge() {
@@ -461,6 +404,7 @@ async function loadAprovacaoPanel() {
         .order('created_at', { ascending: true }); 
 
     if (error) {
+        console.error('Erro ao carregar lista de aprovação:', error);
         listDiv.innerHTML = 'Erro ao carregar lista. Verifique a Política RLS de SELECT na tabela "perfis".';
         return;
     }
@@ -502,46 +446,6 @@ async function aproveOrReject(userId, newStatus, currentNivel) {
     alert(`Usuário marcado como: ${newStatus}.`);
     loadAprovacaoPanel(); 
     updateAprovacaoBadge(); // ATUALIZA O BADGE APÓS A MUDANÇA
-}
-
-// NOVO: Função para carregar o Log de Exclusões (Req 5)
-async function loadExclusaoLogs() {
-    const listDiv = document.getElementById('log-exclusoes-list');
-    listDiv.innerHTML = 'Carregando logs...';
-    
-    // NOTA: Esta tabela não existia na última verificação. Ela deve ser criada.
-    const { data, error } = await supabase
-        .from(LOG_EXCLUSOES_TABLE)
-        .select(`
-            created_at, 
-            acao, 
-            detalhes, 
-            perfis!inner (email)
-        `)
-        .order('created_at', { ascending: false }); 
-
-    if (error) {
-        listDiv.innerHTML = 'Erro ao carregar logs. Execute o SQL de criação da tabela log_exclusoes.';
-        return;
-    }
-
-    let html = '<table><tr><th>Data/Hora</th><th>Ação</th><th>Administrador</th></tr>';
-    data.forEach(log => {
-        const adminNome = log.perfis.email.split('@')[0];
-        const acaoText = log.acao === 'DELETE_ALL' ? 'EXCLUSÃO TOTAL' : 'Exclusão de Pedido';
-        const date = new Date(log.created_at).toLocaleString('pt-BR');
-        
-        html += `
-            <tr>
-                <td>${date}</td>
-                <td>${acaoText}</td>
-                <td>${adminNome}</td>
-            </tr>
-        `;
-    });
-    html += '</table>';
-
-    listDiv.innerHTML = html;
 }
 
 
@@ -1029,101 +933,8 @@ async function deleteAllDeliveries() {
     document.getElementById('detalhes-pedido').classList.add('hidden');
 }
 
-// ** Lógica de Adicionar Foto e Envio **
-
-function compressImage(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const MAX_WIDTH = 800; 
-                let width = img.width;
-                let height = img.height;
-
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob(resolve, 'image/jpeg', 0.7); 
-            };
-            img.onerror = reject; 
-            img.src = event.target.result;
-        };
-        reader.onerror = reject; 
-        reader.readAsDataURL(file);
-    });
-}
-
-async function addPhotoFromInput(event) {
-    const file = event.target.files[0];
-    const previewDiv = document.getElementById('photos-preview');
-    const statusDiv = document.getElementById('photo-status');
-    statusDiv.textContent = ''; 
-    
-    if (!file) return;
-
-    statusDiv.textContent = 'Processando e compactando foto...';
-    
-    try {
-        const compressedBlob = await compressImage(file);
-        
-        const photoName = `photo_${Date.now()}.jpg`;
-        const compressedFile = new File([compressedBlob], photoName, { type: 'image/jpeg' });
-
-        photosToUpload.push(compressedFile);
-
-        const imgUrl = URL.createObjectURL(compressedBlob);
-        
-        const photoContainer = document.createElement('div');
-        photoContainer.style = 'position: relative;';
-        
-        const imgElement = document.createElement('img');
-        imgElement.src = imgUrl;
-        imgElement.style = 'max-width: 80px; max-height: 80px; height: auto; border: 1px solid #333;';
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'X';
-        deleteBtn.style = 'position: absolute; top: -5px; right: -5px; background-color: red; border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 10px; cursor: pointer;';
-        deleteBtn.onclick = function() {
-            const index = photosToUpload.indexOf(compressedFile);
-            if (index > -1) {
-                photosToUpload.splice(index, 1);
-            }
-            previewDiv.removeChild(photoContainer);
-            URL.revokeObjectURL(imgUrl); 
-            if (photosToUpload.length === 0) {
-                 statusDiv.textContent = 'Nenhuma foto anexada.';
-            } else {
-                statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
-            }
-        };
-
-        photoContainer.appendChild(imgElement);
-        photoContainer.appendChild(deleteBtn);
-        previewDiv.appendChild(photoContainer);
-
-        statusDiv.textContent = `${photosToUpload.length} foto(s) anexada(s).`;
-        
-    } catch (e) {
-        console.error('Erro ao adicionar foto:', e);
-        statusDiv.textContent = 'Erro ao processar a foto.';
-    } finally {
-        event.target.value = '';
-    }
-}
-
 // ** EVENT LISTENER para a nova função de foto sequencial **
 document.getElementById('single-photo-input').addEventListener('change', addPhotoFromInput);
-}
 </script>
 </body>
 </html>
-

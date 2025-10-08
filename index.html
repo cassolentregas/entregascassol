@@ -404,7 +404,7 @@ async function handleRegister() {
             return showToast('Este e-mail já está cadastrado. Tente fazer login.');
         }
         // Este erro agora inclui a falha de validação ou de email
-        return showToast('Erro ao cadastrar. Tente novamente.');
+        return showToast('Erro ao cadastrar. Tente novamente.', 'error');
     }
     
     // 2. Desloga o usuário e informa a pendência

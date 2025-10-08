@@ -762,8 +762,10 @@
         }
 
         // Função para DESATIVAR ou REATIVAR um usuário
+        // VERSÃO CORRIGIDA
         async function toggleUserStatus(userId, userEmail, newStatus) {
             const actionText = newStatus === 'INATIVO' ? 'DESATIVAR' : 'REATIVAR';
+            const actionGerund = newStatus === 'INATIVO' ? 'Desativando' : 'Reativando'; // Texto para o loading
 
             if (!confirm(`Você tem certeza que deseja ${actionText} o usuário ${userEmail}?`)) {
                 return;
@@ -773,7 +775,7 @@
             const authenticated = await secureReauthenticate();
             if (!authenticated) return;
 
-            showToast(`${actionText.slice(0, -1)}ndo usuário...`, 'info');
+            showToast(`${actionGerund} usuário...`, 'info');
 
             const { error } = await supabase
                 .from(PERFIS_TABLE)
@@ -783,7 +785,7 @@
             if (error) {
                 showToast(`Erro ao ${actionText.toLowerCase()} o usuário.`, 'error');
             } else {
-                showToast(`Usuário ${actionText.toLowerCase()} com sucesso.`, 'success');
+                showToast(`Usuário ${newStatus === 'INATIVO' ? 'desativado' : 'reativado'} com sucesso.`, 'success');
                 loadUserList(); // Recarrega a lista para mostrar a mudança
             }
         }

@@ -99,15 +99,38 @@
             background-color: #e0e0e0;
         }
 
-        .delete-btn {
+        /* Dentro da sua tag <style> */
+
+        /* Regras em comum para ambos os botões */
+        .delete-btn,
+        .reactivate-btn {
             width: auto;
             padding: 5px 10px;
             margin-left: 10px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            /* Adicionando para consistência */
+        }
+
+        /* Cor específica para o botão de desativar */
+        .delete-btn {
             background-color: #dc3545;
+            /* Vermelho */
         }
 
         .delete-btn:hover {
             background-color: #c82333;
+        }
+
+        /* Cor específica para o botão de reativar */
+        .reactivate-btn {
+            background-color: #28a745;
+            /* Verde */
+        }
+
+        .reactivate-btn:hover {
+            background-color: #218838;
         }
 
         .aprovacao-card {
@@ -716,11 +739,12 @@
         }
 
         // Função para carregar a lista de todos os usuários (ativos e inativos)
+        // VERSÃO ATUALIZADA
         async function loadUserList() {
             const listDiv = document.getElementById('user-list');
             listDiv.innerHTML = '<p>Carregando usuários...</p>';
 
-            // Busca todos os perfis, exceto o do gerente que está logado
+            // Busca todos os perfis, exceto o do gerente logado
             const { data, error } = await supabase
                 .from(PERFIS_TABLE)
                 .select('id, nome, email, nivel_acesso, status')
@@ -738,14 +762,17 @@
             listDiv.innerHTML = '';
             data.forEach(user => {
                 const isApproved = user.status === 'APROVADO';
-                const statusColor = isApproved ? 'green' : '#6c757d';
-                const statusText = isApproved ? 'ATIVO' : (user.status || 'PENDENTE').toUpperCase();
+                const statusColor = isApproved ? 'green' : (user.status === 'REJEITADO' ? 'red' : '#6c757d');
+                const statusText = (user.status || 'PENDENTE').toUpperCase();
                 const buttonText = isApproved ? 'Desativar' : 'Reativar';
                 const newStatus = isApproved ? 'INATIVO' : 'APROVADO';
-                const buttonClass = isApproved ? 'delete-btn' : ''; // Reutiliza a classe vermelha para desativar
+
+                // --- A MUDANÇA ESTÁ AQUI ---
+                // Agora, se o usuário não estiver aprovado, usamos a classe 'reactivate-btn'
+                const buttonClass = isApproved ? 'delete-btn' : 'reactivate-btn';
 
                 const userCard = document.createElement('div');
-                userCard.className = 'pedido-card'; // Reutilizando a classe
+                userCard.className = 'pedido-card';
                 userCard.innerHTML = `
             <div>
                 <strong>${user.nome || user.email}</strong>
